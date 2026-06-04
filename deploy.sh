@@ -72,6 +72,44 @@ set +a
 
 TARGET="${TARGET:-${HA_CONFIG_MOUNT:-/Volumes/config}}"
 
+# mDNS hostnames like `homeassistant.local` can be flaky during a long
+# script run — the macOS resolver intermittently drops the lookup
+# entirely, leading to per-probe 5 s timeouts even though HA is up.
+# Resolve the hostname to an IP once and substitute it for the rest of
+# the deploy. We export the rewritten HA_URL so child tools (the
+# WebSocket helpers) inherit it too.
+resolve_ha_url() {
+  if [[ -z "${HA_URL:-}" ]]; then
+    return 0
+  fi
+  local stripped host
+  stripped="${HA_URL#http://}"
+  stripped="${stripped#https://}"
+  host="${stripped%%[:/]*}"
+  if [[ -z "$host" || "$host" =~ ^[0-9.]+$ ]]; then
+    return 0  # Already an IP, or empty
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 0  # No resolver available, fall through
+  fi
+  local ip
+  ip=$(python3 -c "import socket,sys
+try:
+    print(socket.gethostbyname('$host'))
+except OSError:
+    sys.exit(1)" 2>/dev/null) || return 0
+  if [[ -z "$ip" ]]; then
+    return 0
+  fi
+  local resolved="${HA_URL//$host/$ip}"
+  if [[ "$resolved" != "$HA_URL" ]]; then
+    echo "🔍 Resolved $host → $ip (using $resolved for the rest of this run)"
+    export HA_URL="$resolved"
+  fi
+}
+
+resolve_ha_url
+
 # --- Mount helpers ---
 is_mounted() {
   mount | grep -Fq " on $1 ("

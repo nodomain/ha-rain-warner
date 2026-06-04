@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-04 - Absolute clock times + deploy polish
+
+### Added
+
+- New `rain_starts_at` and `rain_ends_at` timestamp sensors that show
+  the absolute clock time when rain begins or stops, so users don't
+  have to mentally add minutes to the current time. `rain_ends_at`
+  also incorporates the optical-flow extrapolation, capped at 6 h.
+- The Lovelace card now uses these timestamps in its status banner:
+  "Es regnet jetzt (0.2 mm/h), endet um 18:42" instead of "endet in
+  250 min". Falls back to the relative duration when the timestamp
+  sensors aren't configured.
+
+### Changed
+
+- `deploy.sh` now also syncs `dashboard/rain-warner-card.js` to
+  `<config>/www/rain-warner-card.js` so the card and the integration
+  stay in lock-step on every deploy.
+- `deploy.sh --restart` now treats HTTP 502/503/504 from
+  `homeassistant.restart` as "restart accepted" instead of failing.
+  These are normal during a restart because HA shuts down before it
+  can fully respond. After the restart call the script polls
+  `/api/config` for up to 3 minutes until HA is back online.
+- `deploy.sh` triggers a restart when *either* the integration code
+  *or* the Lovelace card changed, not just code.
+
 ## [0.3.0] - 2026-06-04 - Optional pysteps engine
 
 ### Added

@@ -106,4 +106,6 @@ class RainWarnerRainExpectedSensor(CoordinatorEntity[RainWarnerCoordinator], Bin
             "rain_starts_in_minutes": self.coordinator.data.get("rain_start_minutes"),
             "max_precipitation_mm_h": self.coordinator.data.get("max_precipitation_next_2h", 0.0),
             "total_precipitation_mm": self.coordinator.data.get("total_precipitation_next_2h", 0.0),
+            "forecast": self.coordinator.data.get("forecast", {}),
+            "forecast_extended": self.coordinator.data.get("forecast_extended", {}),
         }

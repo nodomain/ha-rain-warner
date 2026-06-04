@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Custom Lovelace card (`dashboard/rain-warner-card.js`) — a single
+  vanilla-JS file (no build step) that visualizes the integration's
+  full nowcast in one card: status banner, 2 h precipitation bar
+  chart, optional 6 h extended-forecast tail (greyed out), current
+  type, temperature and today's accumulated rain.
+- The `binary_sensor.rain_expected` entity now exposes `forecast` and
+  `forecast_extended` as attributes so cards can render the bar chart
+  without extra calls.
 - Persistent rain statistics (`stats.py`) accumulated across HA
   restarts via the HA Storage helper:
   - `precipitation_today` / `precipitation_yesterday` (mm)

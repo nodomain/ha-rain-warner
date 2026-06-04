@@ -106,6 +106,9 @@ ha-rain-warner/
 4. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z — Short description"`
 5. Push: `git push && git push origin vX.Y.Z`
 6. Create GitHub Release: `gh release create vX.Y.Z --title "vX.Y.Z — Title" --notes-file -`
+7. For minor/major bumps with user-visible features: post a reply to
+   the community announcement thread (see "Community Announcements"
+   below). Patch releases skip this step.
 
 **Important**: The CHANGELOG must always reflect the current release state.
 `[Unreleased]` is for work-in-progress between releases. When cutting a
@@ -140,3 +143,60 @@ release, ALL unreleased items move to the new version section.
 - **No external Python deps**: Uses only stdlib (`array`, `bz2`, `tarfile`, `math`)
 - **Extrapolation**: When rain doesn't end within 2h, estimates duration by
   tracking rain field centroid movement and trailing edge distance (capped at 6h)
+
+## Community Announcements
+
+The project has a single canonical announcement thread on the
+official Home Assistant Community forum. Don't open new threads for
+updates — reply to the existing one so the discussion stays in one
+place and the topic gets bumped to the top of the category.
+
+- **Topic:** [Rain Warner — Hyperlocal DWD radar nowcasting](https://community.home-assistant.io/t/rain-warner-hyperlocal-dwd-radar-nowcasting-2-6-h-forecast-alert-sensors-lovelace-card/1012836)
+- **Category:** `Share your Projects! / Custom Integrations`
+- **Tag:** `weather` (the forum's create-new-tag perm requires higher
+  trust level; `rain` / `forecast` / `integration` weren't accepted at
+  posting time)
+- **Author:** `nodomain`
+
+### When to post a reply
+
+| Event | Reply? |
+|-------|--------|
+| Patch release (vX.Y.Z) | No |
+| Minor release with new sensors / features (vX.Y.0) | Yes |
+| Major release (vX.0.0) | Yes |
+| Bug fixes only | No |
+| Breaking changes | Yes — prominently |
+
+### Reply template (minor / major release)
+
+```markdown
+## v0.X.0 — short headline
+
+**Highlights**
+
+- New sensor / feature one-liner
+- Another one-liner
+- Bug-fix highlight if relevant
+
+Full changelog: <https://github.com/nodomain/ha-rain-warner/releases/tag/v0.X.0>
+```
+
+Keep the reply tight — the full notes already live in the GitHub
+release, the forum reply only needs to surface what would make a
+reader bother updating.
+
+### Posting style guide (for the OP and any future thread)
+
+- Tone: confident but not salesy. Lead with what makes the integration
+  different (no external deps, hyperlocal radar grid, optical-flow
+  extension, alert flags).
+- Length: medium — long enough to communicate value, short enough that
+  someone can decide to install in 30 seconds. The current OP is a
+  good reference length.
+- Structure: Problem statement → Sensors → Engines → Reference YAMLs
+  → Architecture (for the curious) → Status & call for feedback.
+- Always include the GitHub repo link near the top — Discourse expands
+  it into a rich onebox automatically.
+- Emojis: sparingly, matching the existing top-posts in the category
+  (one in the heading, one in the closing line).

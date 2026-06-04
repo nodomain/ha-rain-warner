@@ -135,7 +135,7 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         current = raw_data.get("current_precipitation", 0.0)
         max_2h = self._max_precip(forecast, 120)
         temperature_c = raw_data.get("temperature_c")
-        rain_start_minutes = self._find_rain_start(forecast)
+        rain_start_minutes = self._find_rain_start(forecast, current)
         rain_end_minutes = self._find_rain_end(forecast, current)
         rain_end_extrapolated = raw_data.get("rain_end_extrapolated")
 
@@ -212,8 +212,18 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return "violent"
 
     @staticmethod
-    def _find_rain_start(forecast: dict[int, float]) -> int | None:
-        """Find minutes until rain starts (None if not raining in forecast window)."""
+    def _find_rain_start(
+        forecast: dict[int, float], current_precipitation: float = 0.0
+    ) -> int | None:
+        """Find minutes until rain starts.
+
+        Returns None when:
+            - It's already raining (start time is now / in the past, so the
+              question doesn't make sense)
+            - No rain anywhere in the forecast window
+        """
+        if current_precipitation > 0.0:
+            return None
         for minutes in sorted(forecast.keys()):
             if forecast[minutes] > 0.0:
                 return minutes

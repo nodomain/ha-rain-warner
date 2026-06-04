@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -35,6 +37,10 @@ async def async_setup_entry(
         RainWarnerMaxPrecip2hSensor(coordinator, entry),
         RainWarnerTotalHourSensor(coordinator, entry),
         RainWarnerTotal2hSensor(coordinator, entry),
+        RainWarnerPrecipitationTodaySensor(coordinator, entry),
+        RainWarnerPrecipitationYesterdaySensor(coordinator, entry),
+        RainWarnerDryStreakSensor(coordinator, entry),
+        RainWarnerLastRainAtSensor(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -309,3 +315,90 @@ class RainWarnerTotal2hSensor(RainWarnerBaseSensor):
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get("total_precipitation_next_2h", 0.0)
+
+
+class RainWarnerPrecipitationTodaySensor(RainWarnerBaseSensor):
+    """Accumulated precipitation since UTC midnight."""
+
+    _attr_native_unit_of_measurement = "mm"
+    _attr_device_class = SensorDeviceClass.PRECIPITATION
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_icon = "mdi:weather-rainy"
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: RainWarnerCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "precipitation_today", "Precipitation today")
+
+    @property
+    def native_value(self) -> float | None:
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("precipitation_today_mm", 0.0)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        if self.coordinator.data is None:
+            return {}
+        return {"daily_history": self.coordinator.data.get("daily_history", [])}
+
+
+class RainWarnerPrecipitationYesterdaySensor(RainWarnerBaseSensor):
+    """Total precipitation on the previous UTC day."""
+
+    _attr_native_unit_of_measurement = "mm"
+    _attr_device_class = SensorDeviceClass.PRECIPITATION
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_icon = "mdi:weather-rainy"
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: RainWarnerCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "precipitation_yesterday", "Precipitation yesterday")
+
+    @property
+    def native_value(self) -> float | None:
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("precipitation_yesterday_mm", 0.0)
+
+
+class RainWarnerDryStreakSensor(RainWarnerBaseSensor):
+    """Hours since the last significant rain."""
+
+    _attr_native_unit_of_measurement = UnitOfTime.HOURS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:weather-sunny"
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: RainWarnerCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "dry_streak_hours", "Dry streak")
+
+    @property
+    def native_value(self) -> float | None:
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("dry_streak_hours")
+
+
+class RainWarnerLastRainAtSensor(RainWarnerBaseSensor):
+    """Timestamp of the last observed rain."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-outline"
+
+    def __init__(self, coordinator: RainWarnerCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "last_rain_at", "Last rain at")
+
+    @property
+    def native_value(self) -> datetime | None:
+        if self.coordinator.data is None:
+            return None
+        iso = self.coordinator.data.get("last_rain_at")
+        if not iso:
+            return None
+        try:
+            ts = datetime.fromisoformat(iso)
+        except ValueError:
+            return None
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return ts

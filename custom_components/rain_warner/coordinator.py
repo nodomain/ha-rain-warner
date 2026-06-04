@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .bright_sky import BrightSkyClient
@@ -29,9 +30,13 @@ from .const import (
 from .dwd_radar import DWDRadarClient
 from .open_meteo import OpenMeteoClient, is_in_dwd_coverage
 from .precip_type import classify as classify_precip_type
+from .stats import RainStatistics
 from .temperature import TemperatureProvider
 
 _LOGGER = logging.getLogger(__name__)
+
+_STATS_STORAGE_VERSION = 1
+_STATS_STORAGE_KEY_TEMPLATE = f"{DOMAIN}_stats_" + "{entry_id}"
 
 
 class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -82,8 +87,22 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.data_source != DATA_SOURCE_OPEN_METEO:
             self._temperature_provider = TemperatureProvider(hass, self.latitude, self.longitude)
 
+        # Persistent rain statistics (today/yesterday/dry streak/history).
+        self._stats_store: Store = Store(
+            hass,
+            _STATS_STORAGE_VERSION,
+            _STATS_STORAGE_KEY_TEMPLATE.format(entry_id=entry.entry_id),
+        )
+        self._stats: RainStatistics = RainStatistics()
+        self._stats_loaded = False
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the radar source."""
+        if not self._stats_loaded:
+            stored = await self._stats_store.async_load()
+            self._stats = RainStatistics.from_dict(stored if isinstance(stored, dict) else None)
+            self._stats_loaded = True
+
         try:
             data = await self._client.async_get_data()
         except Exception as err:
@@ -92,6 +111,11 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Enrich with air temperature when the backend doesn't provide one.
         if data.get("temperature_c") is None and self._temperature_provider is not None:
             data["temperature_c"] = await self._temperature_provider.async_get()
+
+        # Fold this observation into the persistent statistics.
+        now = datetime.now(timezone.utc)
+        self._stats.update(now, float(data.get("current_precipitation", 0.0) or 0.0))
+        await self._stats_store.async_save(self._stats.to_dict())
 
         return self._process_data(data)
 
@@ -118,6 +142,11 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "total_precipitation_next_2h": raw_data.get("total_next_2h", 0.0),
             "temperature_c": temperature_c,
             "motion": raw_data.get("motion"),
+            "precipitation_today_mm": self._stats.precipitation_today_mm,
+            "precipitation_yesterday_mm": self._stats.precipitation_yesterday_mm,
+            "dry_streak_hours": self._stats.dry_streak_hours(),
+            "last_rain_at": self._stats.last_rain_at_iso,
+            "daily_history": list(self._stats.history),
             "last_updated": raw_data.get("timestamp"),
             "data_source": self.data_source,
         }

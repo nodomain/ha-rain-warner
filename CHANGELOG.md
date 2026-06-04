@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Persistent rain statistics (`stats.py`) accumulated across HA
+  restarts via the HA Storage helper:
+  - `precipitation_today` / `precipitation_yesterday` (mm)
+  - `dry_streak` (hours since the last rain >= 0.1 mm/h)
+  - `last_rain_at` (timestamp)
+  - 30-day daily-total ring buffer exposed as an attribute for
+    sparkline cards.
+- The accumulator clamps unusually long gaps between updates (e.g. an
+  HA restart) to a single 5-min interval so totals never spike from
+  bookkeeping anomalies.
 - New `precipitation_type` sensor classifying the current precipitation
   as one of `none`, `rain`, `sleet`, `freezing_rain`, `snow`,
   `hail_likely`, or `unknown`. Uses radar intensity plus 2 m air

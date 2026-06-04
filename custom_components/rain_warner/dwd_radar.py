@@ -36,6 +36,7 @@ from .const import (
     DE1200_ROWS,
     DWD_RADAR_BASE_URL,
 )
+from .nowcast import extend_forecast
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -341,15 +342,27 @@ class DWDRadarClient:
         total_next_hour = sum(v for k, v in forecast.items() if k <= 60) * (5 / 60)
         total_next_2h = sum(v for k, v in forecast.items() if k <= 120) * (5 / 60)
 
-        # Estimate rain end via extrapolation if rain doesn't end in 2h window
-        rain_end_estimate = self._estimate_rain_end(frames, current, forecast)
+        # Extend forecast beyond 2 h via custom optical-flow advection.
+        # Returns the original dict unchanged if motion can't be estimated.
+        extended_forecast, motion_meta = await self._hass.async_add_executor_job(
+            extend_forecast,
+            frames,
+            self._grid_row,
+            self._grid_col,
+            self._radius_cells,
+            forecast,
+        )
+
+        rain_end_estimate = self._extract_extrapolated_end(extended_forecast, current)
 
         return {
             "current_precipitation": current,
             "forecast": forecast,
+            "forecast_extended": extended_forecast,
             "total_next_hour": round(total_next_hour, 2),
             "total_next_2h": round(total_next_2h, 2),
             "rain_end_extrapolated": rain_end_estimate,
+            "motion": motion_meta,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -368,120 +381,28 @@ class DWDRadarClient:
             _LOGGER.error("Error downloading DWD radar: %s", err)
             return None
 
-    def _estimate_rain_end(
-        self,
-        frames: list[RadolanFrame],
-        current: float,
-        forecast: dict[int, float],
+    @staticmethod
+    def _extract_extrapolated_end(
+        extended_forecast: dict[int, float], current: float
     ) -> int | None:
-        """Estimate when rain ends by extrapolating beyond the 2h window.
+        """Find the minute the rain ends in the optical-flow-extended forecast.
 
-        Uses the movement vector of the rain field's centroid to estimate
-        how long the trailing edge will take to pass our location.
-
-        Returns:
-            - Estimated minutes until rain ends (may exceed 120)
-            - None if not applicable (not raining, or ends within 2h)
+        Returns None when rain ends within the original 2 h window (no
+        extrapolation needed) or when the extended forecast doesn't
+        resolve the end either.
         """
-        import math
-
-        # Only extrapolate if rain doesn't end within the forecast window
-        is_raining = current > 0.0 or any(v > 0.0 for v in forecast.values())
-        rain_ends_in_window = False
         raining = current > 0.0
-        for minutes in sorted(forecast.keys()):
-            if forecast[minutes] > 0.0:
+        ends_in_2h = False
+        end_minute: int | None = None
+        for minutes in sorted(extended_forecast.keys()):
+            if extended_forecast[minutes] > 0.0:
                 raining = True
             elif raining:
-                rain_ends_in_window = True
+                end_minute = minutes
+                if minutes <= 120:
+                    ends_in_2h = True
                 break
 
-        if not is_raining or rain_ends_in_window:
+        if ends_in_2h or not raining:
             return None  # Not needed — forecast already tells us
-
-        # Need at least 2 frames to calculate movement
-        if len(frames) < 5:
-            return None
-
-        # Calculate rain field centroid in early and late frames
-        scan_r = 50  # 55km scan radius
-        row, col = self._grid_row, self._grid_col
-
-        def get_centroid(frame: RadolanFrame) -> tuple[float, float] | None:
-            total_w = 0.0
-            sum_r = 0.0
-            sum_c = 0.0
-            for r in range(max(0, row - scan_r), min(DE1200_ROWS, row + scan_r + 1)):
-                for c in range(max(0, col - scan_r), min(DE1200_COLS, col + scan_r + 1)):
-                    raw = frame.data[r * DE1200_COLS + c]
-                    if not (raw & (_CLUTTER_FLAG | _NODATA_FLAG)):
-                        val = raw & _VALUE_MASK
-                        if val > 0:
-                            w = val * frame.precision * 12.0
-                            sum_r += r * w
-                            sum_c += c * w
-                            total_w += w
-            if total_w == 0:
-                return None
-            return (sum_r / total_w, sum_c / total_w)
-
-        # Get centroids from first and last frame
-        c_first = get_centroid(frames[0])
-        c_last = get_centroid(frames[-1])
-
-        if c_first is None or c_last is None:
-            return None
-
-        dt = frames[-1].forecast_minutes - frames[0].forecast_minutes
-        if dt <= 0:
-            return None
-
-        # Movement vector (cells per minute)
-        dr = (c_last[0] - c_first[0]) / dt
-        dc = (c_last[1] - c_first[1]) / dt
-        speed_cells_per_min = math.sqrt(dr * dr + dc * dc)
-
-        if speed_cells_per_min < 0.01:  # Nearly stationary
-            return None  # Can't estimate — might rain indefinitely
-
-        # Measure trailing edge: count rain cells behind our location
-        # "behind" = opposite to the movement direction
-        move_angle = math.atan2(dc, dr)
-        last_frame = frames[-1]
-        trail_length = 0
-
-        for dist in range(1, 300):  # Up to 330km
-            check_r = int(row - dist * math.cos(move_angle))
-            check_c = int(col - dist * math.sin(move_angle))
-            if not (0 <= check_r < DE1200_ROWS and 0 <= check_c < DE1200_COLS):
-                break
-            raw = last_frame.data[check_r * DE1200_COLS + check_c]
-            if not (raw & (_CLUTTER_FLAG | _NODATA_FLAG)) and (raw & _VALUE_MASK) > 0:
-                trail_length = dist
-            else:
-                # Allow small gaps (up to 3 cells) in the rain field
-                gap = 0
-                for g in range(1, 4):
-                    gr = int(row - (dist + g) * math.cos(move_angle))
-                    gc = int(col - (dist + g) * math.sin(move_angle))
-                    if 0 <= gr < DE1200_ROWS and 0 <= gc < DE1200_COLS:
-                        raw_g = last_frame.data[gr * DE1200_COLS + gc]
-                        if (
-                            not (raw_g & (_CLUTTER_FLAG | _NODATA_FLAG))
-                            and (raw_g & _VALUE_MASK) > 0
-                        ):
-                            gap = g
-                            break
-                if gap > 0:
-                    continue  # Skip the gap
-                break
-
-        if trail_length == 0:
-            return None
-
-        # Extra time for trailing edge to pass
-        extra_minutes = trail_length / speed_cells_per_min
-        total_estimate = int(frames[-1].forecast_minutes + extra_minutes)
-
-        # Cap at reasonable maximum (6h = 360 min)
-        return min(total_estimate, 360)
+        return end_minute

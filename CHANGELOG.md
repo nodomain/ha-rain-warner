@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Custom optical-flow nowcasting (`nowcast.py`) extending the RADVOR
+  forecast beyond the 2 h DWD horizon up to 6 h. Estimates a global
+  motion vector via cross-correlation on a sub-window around the user's
+  location and advects the latest known frame semi-Lagrangian for
+  synthetic frames at t+125 … t+360 in 5-min steps.
+- Coordinator now exposes the extended forecast dict and motion metadata
+  (speed in km/h, dr/dc per minute) for diagnostics.
+
+### Changed
+
+- Replaced the centroid + trailing-edge heuristic for rain-end
+  extrapolation with the proper optical-flow advection pipeline. Same
+  6 h cap, but more accurate when the rain field has internal
+  structure (not just a single blob).
+
 ## [0.1.0] - 2026-06-04
 
 ### Added

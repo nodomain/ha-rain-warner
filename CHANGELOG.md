@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-06-04 - Auto-install pysteps on HA OS
+
+### Changed
+
+- Selecting the pysteps engine now triggers an automatic dependency
+  install via Home Assistant's `async_process_requirements` API. HA OS
+  / Supervised / Container users no longer need shell access to
+  `pip install pysteps` — picking the engine in the config flow is
+  enough. First install takes 30–60 s on x86; subsequent restarts
+  reuse the installed package. Falls back to the simple engine and
+  logs a warning if the install fails (e.g. missing wheel for an
+  unusual architecture).
+- README and config-flow help text updated to reflect the new
+  zero-shell install path.
+
 ## [0.6.1] - 2026-06-04 - Robust notification card templates
 
 ### Fixed

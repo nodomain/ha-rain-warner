@@ -280,16 +280,26 @@ heavyweight on Pi-class hardware. Recommended for x86 / Intel NUC
 class HA hosts.
 
 **Installation.** pysteps is *not* listed as a manifest requirement to
-keep the integration lightweight by default. Install it manually:
+keep the integration lightweight by default. The integration installs
+it on demand the first time you pick "pysteps" in the config flow:
 
-```bash
-# In your Home Assistant Python environment (Container/Core/Supervised)
-pip install pysteps
-```
+- **HA OS / Supervised / Container:** nothing to do. When you select
+  the pysteps engine, the integration calls Home Assistant's built-in
+  `async_process_requirements` API and HA installs pysteps into its
+  managed Python environment automatically. The first install takes
+  30–60 s on x86 (numpy + scipy + opencv wheels download). Subsequent
+  restarts reuse the installed package.
+- **HA Core (manual venv):** the auto-install also works, or you can
+  pre-install: `source /srv/homeassistant/bin/activate && pip install pysteps`
 
-Then pick "pysteps" in the integration's setup form. If pysteps
-can't be imported at runtime, the integration logs a warning and
-falls back to the simple engine — your sensors keep working.
+If the auto-install fails (e.g. missing wheel for an unusual
+architecture), the wrapper falls back to the simple engine and logs a
+warning — your sensors keep working. Check
+*Settings → System → Logs* and filter for `rain_warner` to see what
+happened.
+
+To switch engines later: *Settings → Devices & Services → Rain Warner → Configure*
+and pick a different engine.
 
 ## Roadmap
 

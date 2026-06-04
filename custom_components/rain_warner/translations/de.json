@@ -13,12 +13,27 @@
         },
         "data_description": {
           "radius": "Bereich um deinen Standort zur Niederschlagsüberwachung (1-50 km)",
-          "data_source": "DWD Radar bietet höchste Präzision für Deutschland. Bright Sky ist einfacher, aber etwas weniger genau."
+          "data_source": "Auto wählt DWD in Deutschland und Open-Meteo außerhalb. DWD Radar bietet höchste Präzision für Deutschland. Bright Sky ist ein JSON-Wrapper um DWD. Open-Meteo liefert weltweite Daten."
         }
       }
     },
     "error": {
       "invalid_coordinates": "Ungültige Koordinaten. Breitengrad muss zwischen -90 und 90, Längengrad zwischen -180 und 180 liegen."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "precipitation_type": {
+        "state": {
+          "none": "Kein Niederschlag",
+          "rain": "Regen",
+          "sleet": "Schneeregen",
+          "freezing_rain": "Gefrierender Regen",
+          "snow": "Schnee",
+          "hail_likely": "Hagel wahrscheinlich",
+          "unknown": "Unbekannt"
+        }
+      }
     }
   }
 }

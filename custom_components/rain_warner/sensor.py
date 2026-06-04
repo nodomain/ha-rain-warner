@@ -28,6 +28,7 @@ async def async_setup_entry(
     entities: list[SensorEntity] = [
         RainWarnerPrecipitationSensor(coordinator, entry),
         RainWarnerIntensitySensor(coordinator, entry),
+        RainWarnerTypeSensor(coordinator, entry),
         RainWarnerRainStartSensor(coordinator, entry),
         RainWarnerRainEndSensor(coordinator, entry),
         RainWarnerMaxPrecipHourSensor(coordinator, entry),
@@ -110,6 +111,42 @@ class RainWarnerIntensitySensor(RainWarnerBaseSensor):
         return {
             "data_source": self.coordinator.data.get("data_source"),
             "last_radar_update": self.coordinator.data.get("last_updated"),
+        }
+
+
+class RainWarnerTypeSensor(RainWarnerBaseSensor):
+    """Precipitation type sensor (rain / snow / sleet / hail / …)."""
+
+    _attr_icon = "mdi:weather-snowy-rainy"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [
+        "none",
+        "rain",
+        "sleet",
+        "freezing_rain",
+        "snow",
+        "hail_likely",
+        "unknown",
+    ]
+
+    def __init__(self, coordinator: RainWarnerCoordinator, entry: ConfigEntry) -> None:
+        """Initialize."""
+        super().__init__(coordinator, entry, "precipitation_type", "Precipitation type")
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the classified precipitation type."""
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("precipitation_type", "none")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose the temperature used for classification."""
+        if self.coordinator.data is None:
+            return {}
+        return {
+            "temperature_c": self.coordinator.data.get("temperature_c"),
         }
 
 

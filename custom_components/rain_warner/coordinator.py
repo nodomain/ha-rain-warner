@@ -28,6 +28,8 @@ from .const import (
 )
 from .dwd_radar import DWDRadarClient
 from .open_meteo import OpenMeteoClient, is_in_dwd_coverage
+from .precip_type import classify as classify_precip_type
+from .temperature import TemperatureProvider
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,6 +74,14 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             self._client = BrightSkyClient(hass, self.latitude, self.longitude)
 
+        # The DWD/Bright Sky payloads don't include air temperature, but we
+        # need it for precipitation-type classification. Use a cached
+        # Open-Meteo lookup for those backends; Open-Meteo backend gets
+        # the temperature inline.
+        self._temperature_provider: TemperatureProvider | None = None
+        if self.data_source != DATA_SOURCE_OPEN_METEO:
+            self._temperature_provider = TemperatureProvider(hass, self.latitude, self.longitude)
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the radar source."""
         try:
@@ -79,31 +89,34 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             raise UpdateFailed(f"Error fetching rain radar data: {err}") from err
 
+        # Enrich with air temperature when the backend doesn't provide one.
+        if data.get("temperature_c") is None and self._temperature_provider is not None:
+            data["temperature_c"] = await self._temperature_provider.async_get()
+
         return self._process_data(data)
 
     def _process_data(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Process raw radar data into structured forecast."""
         forecast = raw_data.get("forecast", {})
         forecast_extended = raw_data.get("forecast_extended", forecast)
+        current = raw_data.get("current_precipitation", 0.0)
+        max_2h = self._max_precip(forecast, 120)
+        temperature_c = raw_data.get("temperature_c")
         return {
-            "current_precipitation": raw_data.get("current_precipitation", 0.0),
-            "is_raining": raw_data.get("current_precipitation", 0.0) > 0.0,
-            "precipitation_intensity": self._classify_intensity(
-                raw_data.get("current_precipitation", 0.0)
-            ),
+            "current_precipitation": current,
+            "is_raining": current > 0.0,
+            "precipitation_intensity": self._classify_intensity(current),
+            "precipitation_type": classify_precip_type(current, temperature_c, max_2h),
             "forecast": forecast,
             "forecast_extended": forecast_extended,
             "rain_start_minutes": self._find_rain_start(forecast),
-            "rain_end_minutes": self._find_rain_end(
-                forecast,
-                raw_data.get("current_precipitation", 0.0),
-            ),
+            "rain_end_minutes": self._find_rain_end(forecast, current),
             "rain_end_extrapolated": raw_data.get("rain_end_extrapolated"),
             "max_precipitation_next_hour": self._max_precip(forecast, 60),
-            "max_precipitation_next_2h": self._max_precip(forecast, 120),
+            "max_precipitation_next_2h": max_2h,
             "total_precipitation_next_hour": raw_data.get("total_next_hour", 0.0),
             "total_precipitation_next_2h": raw_data.get("total_next_2h", 0.0),
-            "temperature_c": raw_data.get("temperature_c"),
+            "temperature_c": temperature_c,
             "motion": raw_data.get("motion"),
             "last_updated": raw_data.get("timestamp"),
             "data_source": self.data_source,

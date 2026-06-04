@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- New `precipitation_type` sensor classifying the current precipitation
+  as one of `none`, `rain`, `sleet`, `freezing_rain`, `snow`,
+  `hail_likely`, or `unknown`. Uses radar intensity plus 2 m air
+  temperature (NOAA/DWD-style thresholds at −1 / 0.5 / 1.5 °C).
+- Air-temperature provider with 30 min cache that fills in temperature
+  for the DWD and Bright Sky data sources via Open-Meteo, so the
+  classifier works regardless of which radar backend is selected.
+- German and English translations for the new sensor states.
 - Open-Meteo data source for global coverage outside Germany
   (`open_meteo.py`). Fulfills the "RainViewer fallback" roadmap item:
   RainViewer only serves rendered tiles, Open-Meteo gives us numeric

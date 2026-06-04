@@ -172,6 +172,36 @@ else
   echo "ℹ️  No Lovelace card found at $CARD_SRC — skipping."
 fi
 
+# --- Optional: cache-bust the Lovelace JS resource via WebSocket API ---
+# Browsers cache /local/*.js aggressively because HA doesn't emit useful
+# cache headers. After deploying a new card we update the resource URL
+# to /local/rain-warner-card.js?v=<sha>, but only when the file actually
+# changed (the helper is idempotent).
+cache_bust_card() {
+  local card_file="$CARD_SRC"
+  local base_url="/local/rain-warner-card.js"
+  local helper="$SCRIPT_DIR/tools/ha_update_card_resource.py"
+
+  if [[ ! -f "$card_file" ]]; then
+    return 0
+  fi
+  if [[ ! -x "$helper" ]]; then
+    echo "⚠️  Cache-bust helper not executable: $helper — skipping." >&2
+    return 0
+  fi
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "⚠️  'uv' not found in PATH — skipping cache-bust." >&2
+    return 0
+  fi
+  echo ""
+  echo "🔄 Cache-busting Lovelace resource $base_url ..."
+  "$helper" "$base_url" "$card_file"
+}
+
+if [[ -n "${HA_URL:-}" && -n "${HA_TOKEN:-}" ]]; then
+  cache_bust_card
+fi
+
 # --- HA REST helper ---
 HA_SERVICE_TIMEOUT_S=180
 # Override-able via .env: some hosts (lots of integrations, slow disks)

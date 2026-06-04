@@ -97,6 +97,20 @@ ha-rain-warner/
 └── LICENSE                      # MIT License
 ```
 
+## Release Workflow
+
+1. Update `CHANGELOG.md`: Move items from `[Unreleased]` to a new
+   `[X.Y.Z] - YYYY-MM-DD` section.
+2. Update `version` in `custom_components/rain_warner/manifest.json`.
+3. Commit: `chore: release vX.Y.Z`
+4. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z — Short description"`
+5. Push: `git push && git push origin vX.Y.Z`
+6. Create GitHub Release: `gh release create vX.Y.Z --title "vX.Y.Z — Title" --notes-file -`
+
+**Important**: The CHANGELOG must always reflect the current release state.
+`[Unreleased]` is for work-in-progress between releases. When cutting a
+release, ALL unreleased items move to the new version section.
+
 ## Development Workflow
 
 1. Edit Python code in `custom_components/rain_warner/`

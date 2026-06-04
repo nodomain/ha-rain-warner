@@ -6,7 +6,7 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.12"
 authors = [
-    {name = "Fabian Allendorf"}
+    {name = "Fabian Fischer"}
 ]
 keywords = ["home-assistant", "rain", "radar", "dwd", "weather", "nowcasting"]
 

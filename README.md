@@ -33,6 +33,8 @@ High-precision rain radar integration for Home Assistant. Uses DWD (Deutscher We
 | Precipitation type | `sensor` | rain / sleet / freezing_rain / snow / hail_likely / unknown |
 | Rain starts in | `sensor` | Minutes until rain begins (null if dry forecast) |
 | Rain ends in | `sensor` | Minutes until rain stops — extrapolates beyond 2h via movement tracking |
+| Rain starts at | `sensor` | Absolute clock time when rain is expected to start (timestamp) |
+| Rain ends at | `sensor` | Absolute clock time when rain is expected to stop (timestamp) |
 | Max precipitation (1h) | `sensor` | Peak precipitation rate in next 60 minutes |
 | Max precipitation (2h) | `sensor` | Peak precipitation rate in next 120 minutes |
 | Total precipitation (1h) | `sensor` | Accumulated precipitation in next 60 minutes (mm) |

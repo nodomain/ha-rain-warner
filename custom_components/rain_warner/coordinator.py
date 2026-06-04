@@ -135,6 +135,21 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         current = raw_data.get("current_precipitation", 0.0)
         max_2h = self._max_precip(forecast, 120)
         temperature_c = raw_data.get("temperature_c")
+        rain_start_minutes = self._find_rain_start(forecast)
+        rain_end_minutes = self._find_rain_end(forecast, current)
+        rain_end_extrapolated = raw_data.get("rain_end_extrapolated")
+
+        # Convert relative minutes into absolute timestamps so users see
+        # "rain ends at 18:42" instead of having to add minutes in their
+        # head. None when the answer is not knowable from the forecast.
+        now = datetime.now(timezone.utc)
+        rain_starts_at = (
+            (now + timedelta(minutes=rain_start_minutes)).isoformat()
+            if rain_start_minutes is not None
+            else None
+        )
+        rain_ends_at = self._compute_rain_ends_at(now, rain_end_minutes, rain_end_extrapolated)
+
         return {
             "current_precipitation": current,
             "is_raining": current > 0.0,
@@ -142,9 +157,11 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "precipitation_type": classify_precip_type(current, temperature_c, max_2h),
             "forecast": forecast,
             "forecast_extended": forecast_extended,
-            "rain_start_minutes": self._find_rain_start(forecast),
-            "rain_end_minutes": self._find_rain_end(forecast, current),
-            "rain_end_extrapolated": raw_data.get("rain_end_extrapolated"),
+            "rain_start_minutes": rain_start_minutes,
+            "rain_end_minutes": rain_end_minutes,
+            "rain_starts_at": rain_starts_at,
+            "rain_ends_at": rain_ends_at,
+            "rain_end_extrapolated": rain_end_extrapolated,
             "max_precipitation_next_hour": self._max_precip(forecast, 60),
             "max_precipitation_next_2h": max_2h,
             "total_precipitation_next_hour": raw_data.get("total_next_hour", 0.0),
@@ -159,6 +176,26 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_updated": raw_data.get("timestamp"),
             "data_source": self.data_source,
         }
+
+    @staticmethod
+    def _compute_rain_ends_at(
+        now: datetime,
+        rain_end_minutes: int | None,
+        rain_end_extrapolated: int | None,
+    ) -> str | None:
+        """Convert the various rain-end signals into an absolute ISO timestamp.
+
+        Returns None when the rain end is not knowable (e.g. dry forecast,
+        or rain extends past the 6 h extrapolation cap).
+        """
+        if rain_end_minutes is None:
+            return None
+        if rain_end_minutes >= 0:
+            return (now + timedelta(minutes=rain_end_minutes)).isoformat()
+        # rain_end_minutes == -1 → rain doesn't end inside the 2 h window.
+        if rain_end_extrapolated is None or rain_end_extrapolated >= 360:
+            return None
+        return (now + timedelta(minutes=rain_end_extrapolated)).isoformat()
 
     @staticmethod
     def _classify_intensity(precip_mm_h: float) -> str:

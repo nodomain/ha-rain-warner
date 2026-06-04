@@ -33,6 +33,8 @@ async def async_setup_entry(
         RainWarnerTypeSensor(coordinator, entry),
         RainWarnerRainStartSensor(coordinator, entry),
         RainWarnerRainEndSensor(coordinator, entry),
+        RainWarnerRainStartsAtSensor(coordinator, entry),
+        RainWarnerRainEndsAtSensor(coordinator, entry),
         RainWarnerMaxPrecipHourSensor(coordinator, entry),
         RainWarnerMaxPrecip2hSensor(coordinator, entry),
         RainWarnerTotalHourSensor(coordinator, entry),
@@ -402,3 +404,62 @@ class RainWarnerLastRainAtSensor(RainWarnerBaseSensor):
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         return ts
+
+
+def _parse_iso_or_none(iso: str | None) -> datetime | None:
+    """Parse an ISO timestamp, ensuring the result is timezone-aware UTC."""
+    if not iso:
+        return None
+    try:
+        ts = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts
+
+
+class RainWarnerRainStartsAtSensor(RainWarnerBaseSensor):
+    """Absolute clock time when the next rain is expected to start."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-start"
+
+    def __init__(self, coordinator: RainWarnerCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "rain_starts_at", "Rain starts at")
+
+    @property
+    def native_value(self) -> datetime | None:
+        if self.coordinator.data is None:
+            return None
+        return _parse_iso_or_none(self.coordinator.data.get("rain_starts_at"))
+
+
+class RainWarnerRainEndsAtSensor(RainWarnerBaseSensor):
+    """Absolute clock time when the current/next rain is expected to end.
+
+    Returns unknown when rain extends past the 6 h extrapolation cap or
+    when no rain is in the forecast at all — in those cases the duration
+    is not knowable, so showing a fake clock time would be misleading.
+    """
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-end"
+
+    def __init__(self, coordinator: RainWarnerCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "rain_ends_at", "Rain ends at")
+
+    @property
+    def native_value(self) -> datetime | None:
+        if self.coordinator.data is None:
+            return None
+        return _parse_iso_or_none(self.coordinator.data.get("rain_ends_at"))
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        if self.coordinator.data is None:
+            return {}
+        extrap = self.coordinator.data.get("rain_end_extrapolated")
+        if extrap is not None:
+            return {"extrapolated": True, "confidence": "low" if extrap > 240 else "medium"}
+        return {}

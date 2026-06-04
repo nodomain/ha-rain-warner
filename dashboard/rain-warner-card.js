@@ -20,6 +20,8 @@
  *        type_entity: sensor.rain_warner_precipitation_type
  *        rain_end_entity: sensor.rain_warner_rain_ends_in
  *        rain_start_entity: sensor.rain_warner_rain_starts_in
+ *        rain_ends_at_entity: sensor.rain_warner_rain_ends_at
+ *        rain_starts_at_entity: sensor.rain_warner_rain_starts_at
  *        today_entity: sensor.rain_warner_precipitation_today
  *
  * No build step required — pure HTMLElement + DOM, ~6 KB minified.
@@ -68,6 +70,8 @@ class RainWarnerCard extends HTMLElement {
       type_entity: "sensor.rain_warner_precipitation_type",
       rain_end_entity: "sensor.rain_warner_rain_ends_in",
       rain_start_entity: "sensor.rain_warner_rain_starts_in",
+      rain_ends_at_entity: "sensor.rain_warner_rain_ends_at",
+      rain_starts_at_entity: "sensor.rain_warner_rain_starts_at",
       today_entity: "sensor.rain_warner_precipitation_today",
     };
   }
@@ -143,18 +147,47 @@ class RainWarnerCard extends HTMLElement {
     return minutes.map((m) => ({ minutes: m, mmh: Number(fc[m] || 0) }));
   }
 
+  _formatClockTime(iso) {
+    if (!iso || iso === "unknown" || iso === "unavailable") return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
   _statusText() {
     const isRaining = this._state(this._config.forecast_entity);
     const startMin = Number(this._state(this._config.rain_start_entity)?.state);
     const endVal = this._state(this._config.rain_end_entity)?.state;
+    const startsAt = this._state(this._config.rain_starts_at_entity)?.state;
+    const endsAt = this._state(this._config.rain_ends_at_entity)?.state;
 
     const currentMmh = Number(
       this._state(this._config.precipitation_entity)?.state || 0,
     );
 
     if (currentMmh > 0) {
-      const endTxt = endVal && endVal !== "unknown" ? `, endet in ${endVal} min` : "";
-      return { tone: "rain", text: `Es regnet jetzt (${currentMmh.toFixed(1)} mm/h)${endTxt}` };
+      // Prefer the absolute clock time when we have a rain_ends_at sensor.
+      const endsAtTxt = this._formatClockTime(endsAt);
+      let endTxt = "";
+      if (endsAtTxt) {
+        endTxt = `, endet um ${endsAtTxt}`;
+      } else if (endVal && endVal !== "unknown" && endVal !== "unavailable") {
+        endTxt = `, endet in ${endVal} min`;
+      }
+      return {
+        tone: "rain",
+        text: `Es regnet jetzt (${currentMmh.toFixed(1)} mm/h)${endTxt}`,
+      };
+    }
+    const startsAtTxt = this._formatClockTime(startsAt);
+    if (startsAtTxt && Number.isFinite(startMin) && startMin > 0) {
+      return {
+        tone: "warn",
+        text: `Regen ab ${startsAtTxt} (in ${startMin} min)`,
+      };
     }
     if (Number.isFinite(startMin) && startMin > 0) {
       return {

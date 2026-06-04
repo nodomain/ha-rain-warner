@@ -38,7 +38,14 @@ or `forecast_entity` is required.
 | `type_entity` | optional | Precipitation type sensor (rain/snow/sleet/hail) |
 | `rain_start_entity` | optional | Minutes-until-rain sensor |
 | `rain_end_entity` | optional | Minutes-until-rain-ends sensor |
+| `rain_starts_at_entity` | optional | Absolute clock time when rain begins (timestamp) |
+| `rain_ends_at_entity` | optional | Absolute clock time when rain ends (timestamp) |
 | `today_entity` | optional | Today's accumulated precipitation sensor |
+
+When the `_at` entities are configured, the status banner shows
+absolute clock times ("endet um 18:42") instead of relative durations
+("endet in 250 min"). The duration sensors are still useful for
+automations and as fallbacks.
 
 ## Visualization
 

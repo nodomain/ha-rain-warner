@@ -12,6 +12,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .alerts import (
+    is_extended_dry_spell,
+    is_rain_imminent,
+    is_severe_weather,
+    is_winter_weather,
+)
 from .bright_sky import BrightSkyClient
 from .const import (
     CONF_DATA_SOURCE,
@@ -134,10 +140,14 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         forecast_extended = raw_data.get("forecast_extended", forecast)
         current = raw_data.get("current_precipitation", 0.0)
         max_2h = self._max_precip(forecast, 120)
+        max_6h = self._max_precip(forecast_extended, 360)
         temperature_c = raw_data.get("temperature_c")
         rain_start_minutes = self._find_rain_start(forecast, current)
         rain_end_minutes = self._find_rain_end(forecast, current)
         rain_end_extrapolated = raw_data.get("rain_end_extrapolated")
+        intensity = self._classify_intensity(current)
+        precip_type = classify_precip_type(current, temperature_c, max_2h)
+        is_raining = current > 0.0
 
         # Convert relative minutes into absolute timestamps so users see
         # "rain ends at 18:42" instead of having to add minutes in their
@@ -149,12 +159,20 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else None
         )
         rain_ends_at = self._compute_rain_ends_at(now, rain_end_minutes, rain_end_extrapolated)
+        dry_streak_hours = self._stats.dry_streak_hours()
+
+        # Derived alert flags. Each flips a binary sensor users wire into
+        # walldisplay notifications, automations and push messages.
+        rain_imminent = is_rain_imminent(is_raining, rain_start_minutes)
+        severe_weather = is_severe_weather(intensity, max_2h, precip_type)
+        winter_weather = is_winter_weather(precip_type)
+        extended_dry_spell = is_extended_dry_spell(dry_streak_hours, max_6h)
 
         return {
             "current_precipitation": current,
-            "is_raining": current > 0.0,
-            "precipitation_intensity": self._classify_intensity(current),
-            "precipitation_type": classify_precip_type(current, temperature_c, max_2h),
+            "is_raining": is_raining,
+            "precipitation_intensity": intensity,
+            "precipitation_type": precip_type,
             "forecast": forecast,
             "forecast_extended": forecast_extended,
             "rain_start_minutes": rain_start_minutes,
@@ -164,15 +182,20 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rain_end_extrapolated": rain_end_extrapolated,
             "max_precipitation_next_hour": self._max_precip(forecast, 60),
             "max_precipitation_next_2h": max_2h,
+            "max_precipitation_next_6h": max_6h,
             "total_precipitation_next_hour": raw_data.get("total_next_hour", 0.0),
             "total_precipitation_next_2h": raw_data.get("total_next_2h", 0.0),
             "temperature_c": temperature_c,
             "motion": raw_data.get("motion"),
             "precipitation_today_mm": self._stats.precipitation_today_mm,
             "precipitation_yesterday_mm": self._stats.precipitation_yesterday_mm,
-            "dry_streak_hours": self._stats.dry_streak_hours(),
+            "dry_streak_hours": dry_streak_hours,
             "last_rain_at": self._stats.last_rain_at_iso,
             "daily_history": list(self._stats.history),
+            "rain_imminent": rain_imminent,
+            "severe_weather": severe_weather,
+            "winter_weather": winter_weather,
+            "extended_dry_spell": extended_dry_spell,
             "last_updated": raw_data.get("timestamp"),
             "data_source": self.data_source,
         }

@@ -1,5 +1,11 @@
 # Rain Warner 🌧️
 
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![GitHub release](https://img.shields.io/github/v/release/nodomain/ha-rain-warner)](https://github.com/nodomain/ha-rain-warner/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=nodomain&repository=ha-rain-warner&category=integration)
+
 High-precision rain radar integration for Home Assistant. Uses DWD (Deutscher Wetterdienst) radar data to provide hyperlocal precipitation nowcasting with 1.1 km spatial and 5-minute temporal resolution.
 
 ## Features

@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rain Warner Setup",
+        "description": "Configure your rain radar monitoring location. Coordinates default to your Home Assistant home location.",
+        "data": {
+          "name": "Name",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "data_source": "Data source",
+          "radius": "Monitoring radius (km)"
+        },
+        "data_description": {
+          "radius": "Area around your location to monitor for precipitation (1-50 km)",
+          "data_source": "DWD Radar provides highest precision for Germany. Bright Sky is easier but slightly less accurate."
+        }
+      }
+    },
+    "error": {
+      "invalid_coordinates": "Invalid coordinates. Latitude must be between -90 and 90, longitude between -180 and 180."
+    }
+  }
+}

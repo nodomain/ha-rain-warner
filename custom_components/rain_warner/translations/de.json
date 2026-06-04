@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rain Warner Einrichtung",
+        "description": "Konfiguriere den Standort für die Regenradar-Überwachung. Koordinaten werden aus deiner Home Assistant Konfiguration übernommen.",
+        "data": {
+          "name": "Name",
+          "latitude": "Breitengrad",
+          "longitude": "Längengrad",
+          "data_source": "Datenquelle",
+          "radius": "Überwachungsradius (km)"
+        },
+        "data_description": {
+          "radius": "Bereich um deinen Standort zur Niederschlagsüberwachung (1-50 km)",
+          "data_source": "DWD Radar bietet höchste Präzision für Deutschland. Bright Sky ist einfacher, aber etwas weniger genau."
+        }
+      }
+    },
+    "error": {
+      "invalid_coordinates": "Ungültige Koordinaten. Breitengrad muss zwischen -90 und 90, Längengrad zwischen -180 und 180 liegen."
+    }
+  }
+}

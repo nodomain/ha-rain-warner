@@ -1,0 +1,12 @@
+{
+  "domain": "rain_warner",
+  "name": "Rain Warner",
+  "codeowners": ["@nodomain"],
+  "config_flow": true,
+  "documentation": "https://github.com/nodomain/ha-rain-warner",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/nodomain/ha-rain-warner/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

@@ -143,13 +143,54 @@ else
   echo "✅ Code synced (unchanged)"
 fi
 
+# --- Sync Lovelace card to <config>/www/ ---
+# The custom card is a frontend resource served by HA at /local/...,
+# so it must live in the config volume's www/ directory rather than in
+# custom_components/. We copy it on every deploy so the card and the
+# integration stay in lock-step.
+CARD_SRC="$SCRIPT_DIR/dashboard/rain-warner-card.js"
+CARD_DEST_DIR="$TARGET/www"
+CARD_DEST="$CARD_DEST_DIR/rain-warner-card.js"
+
+if [[ -f "$CARD_SRC" ]]; then
+  mkdir -p "$CARD_DEST_DIR"
+  CARD_OUT=$(rsync -ci --inplace --no-perms --no-owner --no-group \
+    "$CARD_SRC" "$CARD_DEST" 2>&1) || {
+    echo "❌ Card rsync failed:" >&2
+    echo "$CARD_OUT" >&2
+    exit 1
+  }
+  if [[ -n "$CARD_OUT" ]]; then
+    card_changed=true
+    echo "✅ Lovelace card synced to $CARD_DEST"
+  else
+    card_changed=false
+    echo "✅ Lovelace card up-to-date"
+  fi
+else
+  card_changed=false
+  echo "ℹ️  No Lovelace card found at $CARD_SRC — skipping."
+fi
+
 # --- HA REST helper ---
 HA_SERVICE_TIMEOUT_S=180
+HA_RECOVERY_TIMEOUT_S=180
 
 ha_is_alive() {
   curl --fail --silent --max-time 5 \
     -H "Authorization: Bearer $HA_TOKEN" \
     "${HA_URL%/}/api/config" >/dev/null 2>&1
+}
+
+ha_wait_until_alive() {
+  local deadline=$(( $(date +%s) + HA_RECOVERY_TIMEOUT_S ))
+  while [[ $(date +%s) -lt $deadline ]]; do
+    if ha_is_alive; then
+      return 0
+    fi
+    sleep 5
+  done
+  return 1
 }
 
 ha_service_call() {
@@ -181,11 +222,21 @@ ha_service_call() {
     return 1
   }
 
-  if [[ "$http_code" != "200" ]]; then
-    echo "❌ HA returned HTTP $http_code for $service." >&2
-    return 1
-  fi
-  return 0
+  # 502/503/504 during a restart call are expected: HA shuts down before
+  # it can fully respond, so the proxy/server reports an upstream error.
+  # Treat them as "restart accepted" and let the caller wait for HA to
+  # come back online.
+  case "$http_code" in
+    200) return 0 ;;
+    502|503|504)
+      echo "⏳ HA returned HTTP $http_code (expected during restart) — will wait for recovery." >&2
+      return 0
+      ;;
+    *)
+      echo "❌ HA returned HTTP $http_code for $service." >&2
+      return 1
+      ;;
+  esac
 }
 
 # --- Optional: push dashboard via HA WebSocket API ---
@@ -229,7 +280,7 @@ if $do_restart; then
     exit 1
   fi
 
-  if ! $code_changed && ! $force; then
+  if ! $code_changed && ! $card_changed && ! $force; then
     echo ""
     echo "ℹ️  Code unchanged — skipping restart (pass --force to restart anyway)."
   else
@@ -237,16 +288,23 @@ if $do_restart; then
     echo "🔁 Calling homeassistant.restart on $HA_URL ..."
     echo "   HA will be unavailable for ~60 seconds."
     if ha_service_call "homeassistant.restart"; then
-      echo "✅ Restart triggered."
+      echo "⏳ Waiting for HA to come back online (up to ${HA_RECOVERY_TIMEOUT_S}s)..."
+      if ha_wait_until_alive; then
+        echo "✅ HA is back online."
+      else
+        echo "⚠️  HA didn't return within ${HA_RECOVERY_TIMEOUT_S}s." >&2
+        echo "   It may still be starting up — check the HA UI." >&2
+        exit 1
+      fi
     else
       echo "❌ Restart call failed." >&2
       exit 1
     fi
   fi
 else
-  if $code_changed; then
+  if $code_changed || $card_changed; then
     echo ""
-    echo "👉 Code changed. Custom components require a restart to apply:"
+    echo "👉 Changes detected. Custom components require a restart to apply:"
     echo "     ./deploy.sh --restart   # ~60s downtime"
     echo "   …or restart via the HA UI."
   fi

@@ -242,6 +242,40 @@ class RainWarnerCard extends HTMLElement {
           .join("")
       : "";
 
+    // Compute axis label positions in % of the chart width. The chart
+    // contains 24 RADVOR bars + (1 separator + N extended bars) when
+    // forecast_extended is available, with all bars sharing flex:1. We
+    // need labels at the actual bar positions, not at evenly spaced
+    // intervals (justify-content:space-between would put +1h at 33% in
+    // 6 h mode, but bar 12 is actually at ~17%).
+    const totalCells = bars.length + (extBars.length ? 1 + extBars.length : 0);
+    const sepIdx = bars.length; // separator sits between RADVOR and extended
+    const pctOf = (cellIdx) =>
+      totalCells === 0 ? 0 : (cellIdx / totalCells) * 100;
+    const axisLabels = extBars.length
+      ? [
+          { txt: "jetzt", pct: 0, anchor: "start" },
+          { txt: "+1 h", pct: pctOf(12), anchor: "center" },
+          { txt: "+2 h", pct: pctOf(sepIdx), anchor: "center" },
+          { txt: "+6 h", pct: 100, anchor: "end" },
+        ]
+      : [
+          { txt: "jetzt", pct: 0, anchor: "start" },
+          { txt: "+1 h", pct: pctOf(12), anchor: "center" },
+          { txt: "+2 h", pct: 100, anchor: "end" },
+        ];
+    const axisHtml = axisLabels
+      .map(({ txt, pct, anchor }) => {
+        const transform =
+          anchor === "start"
+            ? "none"
+            : anchor === "end"
+              ? "translateX(-100%)"
+              : "translateX(-50%)";
+        return `<span style="left:${pct.toFixed(2)}%;transform:${transform};">${txt}</span>`;
+      })
+      .join("");
+
     this.shadowRoot.innerHTML = `
       <style>
         :host {
@@ -282,6 +316,15 @@ class RainWarnerCard extends HTMLElement {
           padding: 4px;
           border: 1px solid var(--divider-color);
           border-radius: 6px;
+          /* Subtle banding so users can tell where RADVOR ends and the
+             optical-flow extrapolation begins. */
+          background-image: linear-gradient(
+            to right,
+            transparent 0,
+            transparent var(--rw-radvor-end, 33%),
+            rgba(127, 127, 127, 0.06) var(--rw-radvor-end, 33%),
+            rgba(127, 127, 127, 0.06) 100%
+          );
         }
         .chart .sep {
           width: 1px;
@@ -294,7 +337,7 @@ class RainWarnerCard extends HTMLElement {
           height: 100%;
           display: flex;
           align-items: flex-end;
-          min-width: 4px;
+          min-width: 2px;
         }
         .bar {
           width: 100%;
@@ -302,10 +345,15 @@ class RainWarnerCard extends HTMLElement {
           transition: height 0.3s ease;
         }
         .axis {
-          display: flex;
-          justify-content: space-between;
+          position: relative;
+          height: 1em;
           font-size: 0.72rem;
           color: var(--secondary-text-color);
+          margin-top: 2px;
+        }
+        .axis span {
+          position: absolute;
+          white-space: nowrap;
         }
       </style>
       <ha-card>
@@ -324,16 +372,11 @@ class RainWarnerCard extends HTMLElement {
               : ""
           }
         </div>
-        <div class="chart">
+        <div class="chart" style="--rw-radvor-end:${pctOf(sepIdx).toFixed(2)}%">
           ${barsHtml}
           ${extBarsHtml ? `<div class="sep"></div>${extBarsHtml}` : ""}
         </div>
-        <div class="axis">
-          <span>jetzt</span>
-          <span>+1 h</span>
-          <span>+2 h</span>
-          ${extBars.length ? "<span>+6 h</span>" : ""}
-        </div>
+        <div class="axis">${axisHtml}</div>
       </ha-card>
     `;
   }

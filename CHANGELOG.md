@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-04 - Alert binary sensors, walldisplay cards, iPhone push, mDNS deploy fix
+
+### Added
+
+- Four derived alert binary sensors that pre-compute the conditions
+  users actually want to react to:
+  - `binary_sensor.rain_warner_rain_imminent` — dry now, rain in
+    ≤ 30 min
+  - `binary_sensor.rain_warner_severe_weather` — heavy / violent
+    precipitation or hail likelihood
+  - `binary_sensor.rain_warner_winter_weather` — snow / sleet /
+    freezing rain
+  - `binary_sensor.rain_warner_extended_dry_spell` — ≥ 7 d dry and
+    no rain in the 6 h forecast
+- New `alerts.py` module with the pure-stdlib flag logic, separated
+  from the coordinator so it's unit-testable without mocking HA.
+- `automations/rain-warner-push.yaml` — reference iOS push
+  automations for `rain_imminent` and `severe_weather`. Both use
+  `interruption-level: time-sensitive`, share a `rain-warner` tag
+  group so iOS stacks notifications, and are gated to 07:00–22:00
+  local time so nothing wakes you up at night.
+- `dashboard/notification-cards.yaml` — four conditional markdown
+  cards (🌧️ rain coming / ⛈️ severe / ❄️ winter / 🌵 dry spell) that
+  slot into any walldisplay notification stack. Each card stays
+  invisible until its alert flag flips on.
+- Coordinator data now also exposes `max_precipitation_next_6h` as a
+  side product of the dry-spell check.
+
+### Fixed
+
+- `deploy.sh --restart` no longer falsely reports a recovery timeout
+  on macOS hosts where mDNS lookups for `.local` names go flaky
+  during long script runs. The script now resolves `$HA_URL`'s
+  hostname to an IP once at startup and uses that for every
+  subsequent probe, dashboard push and cache-bust. Falls back to the
+  original hostname if the lookup fails.
+
 ## [0.5.1] - 2026-06-04 - Hide rain-start/-end tiles when irrelevant
 
 ### Fixed

@@ -13,8 +13,10 @@ from homeassistant.core import HomeAssistant
 from .const import (
     CONF_DATA_SOURCE,
     CONF_RADIUS,
+    DATA_SOURCE_AUTO,
     DATA_SOURCE_BRIGHT_SKY,
     DATA_SOURCE_DWD,
+    DATA_SOURCE_OPEN_METEO,
     DOMAIN,
 )
 
@@ -26,9 +28,7 @@ class RainWarnerConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -41,7 +41,7 @@ class RainWarnerConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_coordinates"
             else:
                 # Check if coordinates are within DWD coverage
-                data_source = user_input.get(CONF_DATA_SOURCE, DATA_SOURCE_DWD)
+                data_source = user_input.get(CONF_DATA_SOURCE, DATA_SOURCE_AUTO)
 
                 await self.async_set_unique_id(f"{latitude:.4f}_{longitude:.4f}")
                 self._abort_if_unique_id_configured()
@@ -65,10 +65,12 @@ class RainWarnerConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_NAME, default="Rain Warner"): str,
                 vol.Optional(CONF_LATITUDE, default=suggested_lat): vol.Coerce(float),
                 vol.Optional(CONF_LONGITUDE, default=suggested_lon): vol.Coerce(float),
-                vol.Optional(CONF_DATA_SOURCE, default=DATA_SOURCE_DWD): vol.In(
+                vol.Optional(CONF_DATA_SOURCE, default=DATA_SOURCE_AUTO): vol.In(
                     {
+                        DATA_SOURCE_AUTO: "Auto (DWD in Germany, Open-Meteo elsewhere)",
                         DATA_SOURCE_DWD: "DWD Radar (Germany, highest precision)",
                         DATA_SOURCE_BRIGHT_SKY: "Bright Sky API (Germany, easy JSON)",
+                        DATA_SOURCE_OPEN_METEO: "Open-Meteo (global, no API key)",
                     }
                 ),
                 vol.Optional(CONF_RADIUS, default=5): vol.All(

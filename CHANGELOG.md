@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Open-Meteo data source for global coverage outside Germany
+  (`open_meteo.py`). Fulfills the "RainViewer fallback" roadmap item:
+  RainViewer only serves rendered tiles, Open-Meteo gives us numeric
+  precipitation values world-wide with no API key.
+- New `auto` data source mode (now the default) — picks DWD inside the
+  DE1200 coverage bounding box and falls back to Open-Meteo elsewhere.
 - Custom optical-flow nowcasting (`nowcast.py`) extending the RADVOR
   forecast beyond the 2 h DWD horizon up to 6 h. Estimates a global
   motion vector via cross-correlation on a sub-window around the user's
@@ -13,9 +19,14 @@ All notable changes to this project will be documented in this file.
   synthetic frames at t+125 … t+360 in 5-min steps.
 - Coordinator now exposes the extended forecast dict and motion metadata
   (speed in km/h, dr/dc per minute) for diagnostics.
+- Coordinator now passes through air temperature (`temperature_c`) when
+  the data source provides it.
 
 ### Changed
 
+- Default data source switched from `dwd` to `auto`. Existing
+  installations are unaffected; the change only takes effect for new
+  config entries.
 - Replaced the centroid + trailing-edge heuristic for rain-end
   extrapolation with the proper optical-flow advection pipeline. Same
   6 h cap, but more accurate when the rain field has internal

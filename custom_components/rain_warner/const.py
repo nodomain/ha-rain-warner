@@ -32,3 +32,5 @@ CONF_DATA_SOURCE = "data_source"
 # Data source options
 DATA_SOURCE_DWD = "dwd"
 DATA_SOURCE_BRIGHT_SKY = "bright_sky"
+DATA_SOURCE_OPEN_METEO = "open_meteo"
+DATA_SOURCE_AUTO = "auto"  # DWD when in coverage, else Open-Meteo

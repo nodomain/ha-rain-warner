@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-06-04 - Don't retry failed pysteps installs every boot
+
+### Changed
+
+- When the auto-install of pysteps fails on `async_setup_entry`, the
+  integration now persists a sticky `pysteps_install_failed` flag in
+  the entry's options and skips the install attempt on subsequent
+  reloads / restarts. This avoids a wasted ~30 s wheel-build (and the
+  resulting error spam in the log) every time HA boots on a system
+  where pysteps cannot be built — most notably HA OS on Python 3.14
+  with Alpine's noexec `/tmp`, where pysteps has no musllinux wheels
+  and source builds fail at Cython load time. The simple engine
+  fallback continues to work as before, so sensors keep producing
+  data. Submitting the Configure dialog again clears the flag and
+  retries the install on the next reload — useful after a HA OS
+  upgrade or a pysteps wheel release.
+
+### Documentation
+
+- README now explicitly calls out the Python 3.14 + Alpine HA OS
+  incompatibility and explains how to retry the install once a
+  compatible wheel is available.
+
 ## [0.6.5] - 2026-06-04 - Actually fix the 500 in the options flow
 
 ### Fixed

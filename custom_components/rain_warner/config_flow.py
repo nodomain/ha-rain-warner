@@ -21,6 +21,7 @@ from .const import (
     DOMAIN,
     NOWCAST_ENGINE_PYSTEPS,
     NOWCAST_ENGINE_SIMPLE,
+    OPT_PYSTEPS_INSTALL_FAILED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -129,7 +130,21 @@ class RainWarnerOptionsFlow(OptionsFlow):
         """Show the same options the user picked at setup time."""
         if user_input is not None:
             new_data = {**self.config_entry.data, **user_input}
-            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+            # Clear the sticky pysteps-install-failed flag whenever the
+            # user submits the dialog. Treating every explicit submit as
+            # 'retry the install' is the right model: if they re-pick
+            # pysteps we'll attempt the wheel build again on reload, and
+            # if they pick simple the flag becomes irrelevant anyway.
+            new_options = {
+                k: v
+                for k, v in self.config_entry.options.items()
+                if k != OPT_PYSTEPS_INSTALL_FAILED
+            }
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data=new_data,
+                options=new_options,
+            )
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             return self.async_create_entry(title="", data={})
 

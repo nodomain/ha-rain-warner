@@ -295,10 +295,20 @@ it on demand the first time you pick "pysteps" in the config flow:
 If the auto-install fails (e.g. missing wheel for an unusual
 architecture), the wrapper falls back to the simple engine and logs a
 warning — your sensors keep working. Check
-*Settings → System → Logs* and filter for `rain_warner` to see what
+*Settings → System → Logs* and filter for `rain_warner` to see what
 happened.
 
-To switch engines later: *Settings → Devices & Services → Rain Warner → Configure*
+**Known incompatibility.** As of mid-2026 pysteps does not ship
+musllinux wheels for Python 3.14 (the interpreter used by current HA
+OS releases), and HA OS mounts `/tmp` with `noexec` so source builds
+fail when Cython tries to load its compiled `.so` files. If your HA OS
+host runs Python 3.14, the auto-install will fail until pysteps
+publishes 3.14 musllinux wheels — stick with the simple engine on this
+platform. The integration remembers a failed install and skips the
+30 s retry on every subsequent boot; re-submit the Configure dialog to
+ask it to try again (e.g. after a HA OS or pysteps update).
+
+To switch engines later: *Settings → Devices & Services → Rain Warner → Configure*
 and pick a different engine.
 
 ## Roadmap

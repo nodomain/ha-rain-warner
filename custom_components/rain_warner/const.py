@@ -42,3 +42,10 @@ DATA_SOURCE_AUTO = "auto"  # DWD when in coverage, else Open-Meteo
 #            modelling. Requires `pip install pysteps` in the HA Python env.
 NOWCAST_ENGINE_SIMPLE = "simple"
 NOWCAST_ENGINE_PYSTEPS = "pysteps"
+
+# Sticky flag in entry.options that records a previously failed pysteps
+# install. Set by __init__.async_setup_entry on install failure, cleared
+# by the OptionsFlow when the user explicitly submits the dialog (which
+# we treat as 'try the install again'). Lets us avoid retrying a 30 s
+# wheel build that we already know will fail every HA restart.
+OPT_PYSTEPS_INSTALL_FAILED = "pysteps_install_failed"

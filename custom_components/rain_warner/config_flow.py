@@ -6,9 +6,9 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 
 from .const import (
     CONF_DATA_SOURCE,
@@ -30,6 +30,12 @@ class RainWarnerConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Rain Warner."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the options flow so users can switch engine / source later."""
+        return RainWarnerOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
@@ -96,3 +102,55 @@ class RainWarnerConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=data_schema,
             errors=errors,
         )
+
+
+class RainWarnerOptionsFlow(OptionsFlow):
+    """Allow editing data source / engine / radius without re-creating the entry.
+
+    We persist the changes back into `config_entry.data` (not `.options`)
+    because the existing setup code reads everything from `.data`. After
+    a successful submit Home Assistant reloads the entry, which picks up
+    the new engine and triggers the on-demand pysteps install if needed.
+    """
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize."""
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Show the same options the user picked at setup time."""
+        if user_input is not None:
+            new_data = {**self.config_entry.data, **user_input}
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        current = self.config_entry.data
+        data_schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_DATA_SOURCE,
+                    default=current.get(CONF_DATA_SOURCE, DATA_SOURCE_AUTO),
+                ): vol.In(
+                    {
+                        DATA_SOURCE_AUTO: "Auto (DWD in Germany, Open-Meteo elsewhere)",
+                        DATA_SOURCE_DWD: "DWD Radar (Germany, highest precision)",
+                        DATA_SOURCE_BRIGHT_SKY: "Bright Sky API (Germany, easy JSON)",
+                        DATA_SOURCE_OPEN_METEO: "Open-Meteo (global, no API key)",
+                    }
+                ),
+                vol.Optional(CONF_RADIUS, default=current.get(CONF_RADIUS, 5)): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=50)
+                ),
+                vol.Optional(
+                    CONF_NOWCAST_ENGINE,
+                    default=current.get(CONF_NOWCAST_ENGINE, NOWCAST_ENGINE_SIMPLE),
+                ): vol.In(
+                    {
+                        NOWCAST_ENGINE_SIMPLE: "Simple (stdlib, no extra deps) — default",
+                        NOWCAST_ENGINE_PYSTEPS: "pysteps (advanced, auto-installs on first use)",
+                    }
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=data_schema)

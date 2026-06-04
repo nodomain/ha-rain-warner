@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-06-04 - Options flow for switching engines / data sources
+
+### Added
+
+- The integration now exposes an OptionsFlow so existing config
+  entries can be reconfigured via *Settings → Devices & Services → Rain
+  Warner → Configure*. Switching the nowcast engine, data source or
+  monitoring radius no longer requires deleting and re-adding the
+  integration (which would also wipe the persisted statistics).
+  Picking the pysteps engine here triggers the same automatic
+  dependency install introduced in 0.6.2.
+
 ## [0.6.2] - 2026-06-04 - Auto-install pysteps on HA OS
 
 ### Changed

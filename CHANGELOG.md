@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-04 - Hide rain-start/-end tiles when irrelevant
+
+### Fixed
+
+- The 'Regen ab' tile no longer shows 'Unbekannt' while it's already
+  raining — it's now hidden via a `visibility` condition (raining ==
+  off). Symmetric treatment for 'Regen endet' (visible only when
+  raining == on). Cleaner than chasing sentinel values in the sensor.
+
 ## [0.5.0] - 2026-06-04 - Reproducible dashboard, axis fix, rain-start bug, card cache-bust
 
 ### Added

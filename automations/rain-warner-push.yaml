@@ -1,0 +1,77 @@
+# Rain Warner — iPhone push notifications (reference automations)
+#
+# These mirror the live automations created by the integration setup.
+# Import them via Settings → Automations → Create → Edit in YAML, or
+# push them directly via Home Assistant's REST API. They share the same
+# tag/group so iOS stacks consecutive notifications instead of spamming
+# the lock screen.
+#
+# Both are gated to 07:00–22:00 local time so we don't get woken up at
+# night when rain rolls in. Adjust the `time` condition to taste.
+
+- alias: "Rain Warner — Push: Regen im Anmarsch"
+  description: >-
+    Time-sensitive iPhone notification when rain is forecast within
+    30 minutes. Suppressed at night (22:00–07:00).
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.rain_warner_rain_imminent
+      from: "off"
+      to: "on"
+  condition:
+    - condition: time
+      after: "07:00:00"
+      before: "22:00:00"
+  action:
+    - service: notify.mobile_app_iphone_16_pro_max
+      data:
+        title: >-
+          🌧️ Regen ab
+          {{ as_timestamp(states('sensor.rain_warner_rain_starts_at'))
+             | timestamp_custom('%H:%M', true) }}
+        message: >-
+          In {{ states('sensor.rain_warner_rain_starts_in') }} min —
+          Wäsche, Markisen, Polster.
+        data:
+          tag: rain-warner-imminent
+          group: rain-warner
+          push:
+            interruption-level: time-sensitive
+
+- alias: "Rain Warner — Push: Starkregen / Unwetter"
+  description: >-
+    High-priority iPhone notification when severe weather is detected
+    or forecast (heavy/violent precipitation, hail likelihood).
+    Suppressed at night.
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.rain_warner_severe_weather
+      from: "off"
+      to: "on"
+  condition:
+    - condition: time
+      after: "07:00:00"
+      before: "22:00:00"
+  action:
+    - service: notify.mobile_app_iphone_16_pro_max
+      data:
+        title: >-
+          {% if states('sensor.rain_warner_precipitation_type') == 'hail_likely' %}
+          ⚠️ Hagel möglich!
+          {% else %}
+          ⛈️ Starkregen erwartet
+          {% endif %}
+        message: >-
+          Bis zu {{ states('sensor.rain_warner_max_precipitation_2h') }} mm/h.
+          Tür zu, Markisen einholen.
+        data:
+          tag: rain-warner-severe
+          group: rain-warner
+          push:
+            interruption-level: time-sensitive
+            sound:
+              name: default
+              critical: 0
+              volume: 1.0

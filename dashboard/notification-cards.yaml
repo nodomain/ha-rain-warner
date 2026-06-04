@@ -1,0 +1,75 @@
+# Rain Warner — Walldisplay notification cards (reference snippet)
+#
+# Drop these `conditional` markdown cards into a `vertical-stack` on
+# any dashboard view that already has a "notifications" area (e.g. the
+# stack next to an analog clock on a wall display). They stay invisible
+# until the corresponding alert binary sensor flips on, mirroring the
+# pattern HA's other warning notifications follow.
+#
+# All four sensors are exposed by the rain_warner integration:
+#
+#   binary_sensor.rain_warner_rain_imminent       — rain in <= 30 min
+#   binary_sensor.rain_warner_severe_weather      — heavy / violent / hail
+#   binary_sensor.rain_warner_winter_weather      — snow / sleet / freezing rain
+#   binary_sensor.rain_warner_extended_dry_spell  — >= 7 days no rain
+
+- type: conditional
+  conditions:
+    - condition: state
+      entity: binary_sensor.rain_warner_rain_imminent
+      state: "on"
+  card:
+    type: markdown
+    content: >-
+      🟦 🌧️ **Regen ab
+      {{ as_timestamp(states('sensor.rain_warner_rain_starts_at'))
+         | timestamp_custom('%H:%M', true) }}**
+      (in {{ states('sensor.rain_warner_rain_starts_in') }} min)
+
+      Wäsche, Markisen, Polster reinholen.
+
+- type: conditional
+  conditions:
+    - condition: state
+      entity: binary_sensor.rain_warner_severe_weather
+      state: "on"
+  card:
+    type: markdown
+    content: >-
+      🔴 ⛈️ **Starkregen erwartet — bis
+      {{ states('sensor.rain_warner_max_precipitation_2h') }} mm/h**
+
+      {% if states('sensor.rain_warner_precipitation_type') == 'hail_likely' -%}
+      Hagel möglich — Auto unterstellen!
+      {%- else -%}
+      Tür zu, Markisen einholen.
+      {%- endif %}
+
+- type: conditional
+  conditions:
+    - condition: state
+      entity: binary_sensor.rain_warner_winter_weather
+      state: "on"
+  card:
+    type: markdown
+    content: >-
+      {% set t = states('sensor.rain_warner_precipitation_type') %}
+      {% set label = {'snow': 'Schnee', 'sleet': 'Schneeregen',
+                       'freezing_rain': 'Gefrierender Regen'}.get(t, t) %}
+      ❄️ **{{ label }} erwartet**
+
+      Glatteis-Risiko bei
+      {{ state_attr('sensor.rain_warner_precipitation_type', 'temperature_c') }} °C.
+
+- type: conditional
+  conditions:
+    - condition: state
+      entity: binary_sensor.rain_warner_extended_dry_spell
+      state: "on"
+  card:
+    type: markdown
+    content: >-
+      🟫 🌵 **Letzter Regen vor
+      {{ (states('sensor.rain_warner_dry_streak') | float(0) / 24) | round(0) }} Tagen**
+
+      Pflanzen gießen?

@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-04 - Optional pysteps engine
+
+### Added
+
+- Optional `pysteps` nowcast engine (`nowcast_pysteps.py`) wrapping
+  Lucas-Kanade optical flow + S-PROG cascade decomposition with AR(2)
+  lifecycle modelling. Selectable in the config flow; falls back to
+  the stdlib simple engine when `pysteps` cannot be imported or fails
+  at runtime, so behaviour is never worse than the baseline.
+- New `nowcast_engine` config option (`simple` default, `pysteps` opt-in).
+- pysteps stays out of `manifest.json` requirements — power users
+  install it manually with `pip install pysteps` in their HA Python
+  environment, keeping the integration lightweight on Pi-class
+  hardware.
+- German and English translations for the new engine selector and
+  install hint.
+- Documentation block in README explaining both engines, their
+  trade-offs and the manual install path for pysteps.
+
 ## [0.2.0] - 2026-06-04 - Roadmap completion: optical flow, global coverage, types, stats and Lovelace card
 
 ### Added

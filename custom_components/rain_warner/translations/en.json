@@ -9,11 +9,13 @@
           "latitude": "Latitude",
           "longitude": "Longitude",
           "data_source": "Data source",
-          "radius": "Monitoring radius (km)"
+          "radius": "Monitoring radius (km)",
+          "nowcast_engine": "Nowcast engine"
         },
         "data_description": {
           "radius": "Area around your location to monitor for precipitation (1-50 km)",
-          "data_source": "Auto picks DWD inside Germany and Open-Meteo elsewhere. DWD Radar is the highest precision option for Germany. Bright Sky is a JSON wrapper around DWD. Open-Meteo provides global coverage."
+          "data_source": "Auto picks DWD inside Germany and Open-Meteo elsewhere. DWD Radar is the highest precision option for Germany. Bright Sky is a JSON wrapper around DWD. Open-Meteo provides global coverage.",
+          "nowcast_engine": "Engine that extends the forecast beyond DWD's 2h horizon. Simple uses a stdlib motion estimator. pysteps adds Lucas-Kanade flow + cascade decomposition + lifecycle modelling for noticeably better 2-6h forecasts on intel/x86 hardware. Requires `pip install pysteps` in the HA Python env."
         }
       }
     },

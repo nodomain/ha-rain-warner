@@ -35,6 +35,8 @@ from .const import (
     DE1200_RESOLUTION_KM,
     DE1200_ROWS,
     DWD_RADAR_BASE_URL,
+    NOWCAST_ENGINE_PYSTEPS,
+    NOWCAST_ENGINE_SIMPLE,
 )
 from .nowcast import extend_forecast
 
@@ -278,12 +280,14 @@ class DWDRadarClient:
         latitude: float,
         longitude: float,
         radius: int = 5,
+        nowcast_engine: str = NOWCAST_ENGINE_SIMPLE,
     ) -> None:
         """Initialize the DWD radar client."""
         self._hass = hass
         self._latitude = latitude
         self._longitude = longitude
         self._radius = radius
+        self._nowcast_engine = nowcast_engine
         self._session = async_get_clientsession(hass)
 
         # Pre-calculate grid position
@@ -342,10 +346,17 @@ class DWDRadarClient:
         total_next_hour = sum(v for k, v in forecast.items() if k <= 60) * (5 / 60)
         total_next_2h = sum(v for k, v in forecast.items() if k <= 120) * (5 / 60)
 
-        # Extend forecast beyond 2 h via custom optical-flow advection.
-        # Returns the original dict unchanged if motion can't be estimated.
+        # Extend forecast beyond 2 h via the configured nowcast engine.
+        # Both engines have the same signature so we can swap them out.
+        if self._nowcast_engine == NOWCAST_ENGINE_PYSTEPS:
+            from .nowcast_pysteps import extend_forecast_pysteps
+
+            extend_fn = extend_forecast_pysteps
+        else:
+            extend_fn = extend_forecast
+
         extended_forecast, motion_meta = await self._hass.async_add_executor_job(
-            extend_forecast,
+            extend_fn,
             frames,
             self._grid_row,
             self._grid_col,

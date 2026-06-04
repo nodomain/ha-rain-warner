@@ -9,11 +9,13 @@
           "latitude": "Breitengrad",
           "longitude": "Längengrad",
           "data_source": "Datenquelle",
-          "radius": "Überwachungsradius (km)"
+          "radius": "Überwachungsradius (km)",
+          "nowcast_engine": "Nowcast-Engine"
         },
         "data_description": {
           "radius": "Bereich um deinen Standort zur Niederschlagsüberwachung (1-50 km)",
-          "data_source": "Auto wählt DWD in Deutschland und Open-Meteo außerhalb. DWD Radar bietet höchste Präzision für Deutschland. Bright Sky ist ein JSON-Wrapper um DWD. Open-Meteo liefert weltweite Daten."
+          "data_source": "Auto wählt DWD in Deutschland und Open-Meteo außerhalb. DWD Radar bietet höchste Präzision für Deutschland. Bright Sky ist ein JSON-Wrapper um DWD. Open-Meteo liefert weltweite Daten.",
+          "nowcast_engine": "Engine zur Forecast-Erweiterung über die 2h DWD-Grenze hinaus. Simple verwendet einen stdlib-basierten Motion Estimator. pysteps liefert Lucas-Kanade Optical Flow + Cascade Decomposition + Lifecycle Modellierung für deutlich genauere 2-6h Vorhersagen auf x86-Hardware. Erfordert `pip install pysteps` im HA Python venv."
         }
       }
     },

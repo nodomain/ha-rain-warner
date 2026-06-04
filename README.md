@@ -248,6 +248,47 @@ uv run pytest tests/ -v -k "not network"
 ./deploy.sh --force      # Force restart even if unchanged
 ```
 
+## Nowcast Engines
+
+The forecast extension beyond DWD's 2 h RADVOR horizon (up to 6 h) is
+produced by one of two engines, selectable in the config flow:
+
+### Simple (default)
+
+Stdlib cross-correlation + semi-Lagrangian advection. No extra
+dependencies, runs comfortably on a Raspberry Pi 4. Estimates a single
+global motion vector for the rain field around your location. Best
+for frontal weather; less accurate for rotating convective storms.
+
+### pysteps (advanced, opt-in)
+
+Wraps the [pysteps](https://pysteps.github.io/) library for
+state-of-the-art radar nowcasting:
+
+- **Lucas-Kanade per-pixel optical flow** — captures rotation,
+  divergence and locally varying winds instead of one global vector.
+- **Cascade decomposition** — separates large-scale fronts from
+  small-scale cells and predicts them with different decay rates,
+  staying accurate at 1–3 h where simple advection has degraded.
+- **S-PROG lifecycle modelling** — AR(2) autoregression so cells can
+  grow, intensify, weaken and dissipate.
+
+**Hardware requirement.** pysteps pulls in numpy + scipy and is
+heavyweight on Pi-class hardware. Recommended for x86 / Intel NUC
+class HA hosts.
+
+**Installation.** pysteps is *not* listed as a manifest requirement to
+keep the integration lightweight by default. Install it manually:
+
+```bash
+# In your Home Assistant Python environment (Container/Core/Supervised)
+pip install pysteps
+```
+
+Then pick "pysteps" in the integration's setup form. If pysteps
+can't be imported at runtime, the integration logs a warning and
+falls back to the simple engine — your sensors keep working.
+
 ## Roadmap
 
 - [x] Full DWD RADOLAN binary radar composite parsing
@@ -257,6 +298,7 @@ uv run pytest tests/ -v -k "not network"
 - [x] Dashboard with interactive radar map
 - [x] Rain end extrapolation beyond 2h via movement tracking
 - [x] Custom nowcasting with optical flow (stdlib, pysteps-inspired)
+- [x] Optional pysteps engine for advanced 2–6 h nowcasting (Lucas-Kanade + S-PROG)
 - [x] RainViewer / Open-Meteo fallback for non-German locations
 - [x] Precipitation type detection (rain vs snow vs sleet vs hail)
 - [x] Historical data / statistics (today, yesterday, dry streak, 30-day history)

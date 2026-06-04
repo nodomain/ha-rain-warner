@@ -28,9 +28,17 @@ CONF_LATITUDE = "latitude"
 CONF_LONGITUDE = "longitude"
 CONF_RADIUS = "radius"
 CONF_DATA_SOURCE = "data_source"
+CONF_NOWCAST_ENGINE = "nowcast_engine"
 
 # Data source options
 DATA_SOURCE_DWD = "dwd"
 DATA_SOURCE_BRIGHT_SKY = "bright_sky"
 DATA_SOURCE_OPEN_METEO = "open_meteo"
 DATA_SOURCE_AUTO = "auto"  # DWD when in coverage, else Open-Meteo
+
+# Nowcast engine options for forecast extension beyond the 2 h DWD horizon.
+#   simple : stdlib cross-correlation + semi-Lagrangian advection (default)
+#   pysteps: Lucas-Kanade + S-PROG cascade decomposition with lifecycle
+#            modelling. Requires `pip install pysteps` in the HA Python env.
+NOWCAST_ENGINE_SIMPLE = "simple"
+NOWCAST_ENGINE_PYSTEPS = "pysteps"

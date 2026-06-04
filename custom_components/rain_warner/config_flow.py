@@ -12,12 +12,15 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_DATA_SOURCE,
+    CONF_NOWCAST_ENGINE,
     CONF_RADIUS,
     DATA_SOURCE_AUTO,
     DATA_SOURCE_BRIGHT_SKY,
     DATA_SOURCE_DWD,
     DATA_SOURCE_OPEN_METEO,
     DOMAIN,
+    NOWCAST_ENGINE_PYSTEPS,
+    NOWCAST_ENGINE_SIMPLE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,6 +56,9 @@ class RainWarnerConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_LONGITUDE: longitude,
                         CONF_DATA_SOURCE: data_source,
                         CONF_RADIUS: user_input.get(CONF_RADIUS, 5),
+                        CONF_NOWCAST_ENGINE: user_input.get(
+                            CONF_NOWCAST_ENGINE, NOWCAST_ENGINE_SIMPLE
+                        ),
                     },
                 )
 
@@ -75,6 +81,12 @@ class RainWarnerConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Optional(CONF_RADIUS, default=5): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=50)
+                ),
+                vol.Optional(CONF_NOWCAST_ENGINE, default=NOWCAST_ENGINE_SIMPLE): vol.In(
+                    {
+                        NOWCAST_ENGINE_SIMPLE: "Simple (stdlib, no extra deps) — default",
+                        NOWCAST_ENGINE_PYSTEPS: "pysteps (advanced, requires `pip install pysteps`)",
+                    }
                 ),
             }
         )

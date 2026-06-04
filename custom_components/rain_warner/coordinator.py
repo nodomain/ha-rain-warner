@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .bright_sky import BrightSkyClient
 from .const import (
     CONF_DATA_SOURCE,
+    CONF_NOWCAST_ENGINE,
     CONF_RADIUS,
     DATA_SOURCE_AUTO,
     DATA_SOURCE_BRIGHT_SKY,
@@ -22,6 +23,7 @@ from .const import (
     DATA_SOURCE_OPEN_METEO,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    NOWCAST_ENGINE_SIMPLE,
     PRECIP_THRESHOLD_HEAVY,
     PRECIP_THRESHOLD_LIGHT,
     PRECIP_THRESHOLD_MODERATE,
@@ -55,6 +57,7 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.latitude = entry.data[CONF_LATITUDE]
         self.longitude = entry.data[CONF_LONGITUDE]
         self.radius = entry.data.get(CONF_RADIUS, 5)
+        self.nowcast_engine = entry.data.get(CONF_NOWCAST_ENGINE, NOWCAST_ENGINE_SIMPLE)
         configured_source = entry.data.get(CONF_DATA_SOURCE, DATA_SOURCE_DWD)
 
         # Resolve auto-mode based on geographic coverage.
@@ -73,7 +76,13 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.data_source = configured_source
 
         if self.data_source == DATA_SOURCE_DWD:
-            self._client = DWDRadarClient(hass, self.latitude, self.longitude, self.radius)
+            self._client = DWDRadarClient(
+                hass,
+                self.latitude,
+                self.longitude,
+                self.radius,
+                nowcast_engine=self.nowcast_engine,
+            )
         elif self.data_source == DATA_SOURCE_OPEN_METEO:
             self._client = OpenMeteoClient(hass, self.latitude, self.longitude)
         else:

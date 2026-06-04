@@ -1,6 +1,6 @@
 [project]
 name = "ha-rain-warner"
-version = "0.6.3"
+version = "0.6.4"
 description = "High-precision rain radar integration for Home Assistant using DWD data"
 readme = "README.md"
 license = {text = "MIT"}

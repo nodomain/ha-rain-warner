@@ -111,11 +111,11 @@ class RainWarnerOptionsFlow(OptionsFlow):
     because the existing setup code reads everything from `.data`. After
     a successful submit Home Assistant reloads the entry, which picks up
     the new engine and triggers the on-demand pysteps install if needed.
-    """
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize."""
-        self.config_entry = config_entry
+    Note: HA's framework injects `self.config_entry` automatically since
+    2024.11 — we deliberately don't define an `__init__` because writing
+    to `self.config_entry` ourselves now raises in modern HA versions.
+    """
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Show the same options the user picked at setup time."""

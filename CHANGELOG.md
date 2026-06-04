@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-06-04 - Fix 500 in options flow on modern HA
+
+### Fixed
+
+- Removing `__init__` from the options flow handler. Modern Home
+  Assistant (2024.11+) injects `self.config_entry` itself and writing
+  to that attribute from our own constructor produced a 500 error
+  when the user clicked the Configure cog. With the constructor gone
+  the framework wires everything up correctly and the options dialog
+  loads as expected.
+
 ## [0.6.3] - 2026-06-04 - Options flow for switching engines / data sources
 
 ### Added

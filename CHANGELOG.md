@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-04 - Configurable restart recovery timeout
+
+### Changed
+
+- `deploy.sh` recovery timeout bumped from 180 s to 300 s by default,
+  and now overridable via `HA_RECOVERY_TIMEOUT_S` in `.env`. Hosts
+  with lots of integrations legitimately need longer than 3 min to
+  fully boot.
+
 ## [0.4.0] - 2026-06-04 - Absolute clock times + deploy polish
 
 ### Added

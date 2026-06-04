@@ -174,7 +174,9 @@ fi
 
 # --- HA REST helper ---
 HA_SERVICE_TIMEOUT_S=180
-HA_RECOVERY_TIMEOUT_S=180
+# Override-able via .env: some hosts (lots of integrations, slow disks)
+# legitimately need 5+ minutes to fully come back after a restart.
+HA_RECOVERY_TIMEOUT_S="${HA_RECOVERY_TIMEOUT_S:-300}"
 
 ha_is_alive() {
   curl --fail --silent --max-time 5 \

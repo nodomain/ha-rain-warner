@@ -6,6 +6,12 @@
 # until the corresponding alert binary sensor flips on, mirroring the
 # pattern HA's other warning notifications follow.
 #
+# Each card reads its data from the binary sensor's own attributes
+# rather than separate sensor entities — that keeps the templates
+# defensive (the integration writes the flag and the attributes in the
+# same coordinator pass, so they never get out of sync) and makes
+# manual state overrides for testing trivial.
+#
 # All four sensors are exposed by the rain_warner integration:
 #
 #   binary_sensor.rain_warner_rain_imminent       — rain in <= 30 min
@@ -21,10 +27,12 @@
   card:
     type: markdown
     content: >-
+      {% set ts = state_attr('binary_sensor.rain_warner_rain_imminent', 'rain_starts_at') %}
+      {% set mins = state_attr('binary_sensor.rain_warner_rain_imminent', 'rain_starts_in_minutes') %}
       🟦 🌧️ **Regen ab
-      {{ as_timestamp(states('sensor.rain_warner_rain_starts_at'))
-         | timestamp_custom('%H:%M', true) }}**
-      (in {{ states('sensor.rain_warner_rain_starts_in') }} min)
+      {% if ts %}{{ as_timestamp(ts) | timestamp_custom('%H:%M', true) }}{% else %}gleich{% endif %}**
+      {% if mins %}(in {{ mins }} min){% endif %}
+
 
       Wäsche, Markisen, Polster reinholen.
 
@@ -36,10 +44,13 @@
   card:
     type: markdown
     content: >-
-      🔴 ⛈️ **Starkregen erwartet — bis
-      {{ states('sensor.rain_warner_max_precipitation_2h') }} mm/h**
+      {% set rate = state_attr('binary_sensor.rain_warner_severe_weather', 'max_precipitation_mm_h') | float(0) %}
+      {% set ptype = state_attr('binary_sensor.rain_warner_severe_weather', 'precipitation_type') %}
+      🔴 ⛈️ **Starkregen erwartet
+      {%- if rate > 0 %} — bis {{ rate }} mm/h{%- endif %}**
 
-      {% if states('sensor.rain_warner_precipitation_type') == 'hail_likely' -%}
+
+      {% if ptype == 'hail_likely' -%}
       Hagel möglich — Auto unterstellen!
       {%- else -%}
       Tür zu, Markisen einholen.
@@ -53,13 +64,18 @@
   card:
     type: markdown
     content: >-
-      {% set t = states('sensor.rain_warner_precipitation_type') %}
+      {% set t = state_attr('binary_sensor.rain_warner_winter_weather', 'precipitation_type') %}
+      {% set temp = state_attr('binary_sensor.rain_warner_winter_weather', 'temperature_c') %}
       {% set label = {'snow': 'Schnee', 'sleet': 'Schneeregen',
-                       'freezing_rain': 'Gefrierender Regen'}.get(t, t) %}
+                       'freezing_rain': 'Gefrierender Regen'}.get(t, t or 'Winterwetter') %}
       ❄️ **{{ label }} erwartet**
 
-      Glatteis-Risiko bei
-      {{ state_attr('sensor.rain_warner_precipitation_type', 'temperature_c') }} °C.
+
+      {% if temp is not none -%}
+      Glatteis-Risiko bei {{ temp }} °C.
+      {%- else -%}
+      Glatteis-Risiko.
+      {%- endif %}
 
 - type: conditional
   conditions:
@@ -69,7 +85,9 @@
   card:
     type: markdown
     content: >-
-      🟫 🌵 **Letzter Regen vor
-      {{ (states('sensor.rain_warner_dry_streak') | float(0) / 24) | round(0) }} Tagen**
+      {% set hrs = state_attr('binary_sensor.rain_warner_extended_dry_spell', 'dry_streak_hours') | float(0) %}
+      {% set days = (hrs / 24) | round(0) | int %}
+      🟫 🌵 **Letzter Regen vor {{ days }} Tagen**
+
 
       Pflanzen gießen?

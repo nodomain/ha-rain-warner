@@ -12,12 +12,16 @@ High-precision rain radar integration for Home Assistant. Uses DWD (Deutscher We
 
 - **Real-time precipitation** — Current rain intensity at your exact location from radar data
 - **2-hour nowcast** — 5-minute resolution precipitation forecast using DWD RADVOR extrapolation
-- **Smart rain end estimate** — Extrapolates beyond the 2h window by tracking rain field movement and trailing edge
+- **Custom 6-hour optical-flow extension** — Pysteps-inspired stdlib motion estimation extends the forecast beyond DWD's 2 h horizon
+- **Smart rain end estimate** — Tracks rain field movement to predict when rain stops
 - **Hyperlocal** — 1.1 km grid resolution via polar stereographic projection, not just the nearest weather station
-- **Multiple sensors** — Current rate, intensity class, rain start/end timing, totals, maximums
-- **Two data sources** — DWD raw radar (highest precision) or Bright Sky API (easier, JSON-based)
-- **No API key needed** — DWD Open Data is free and unlimited
-- **No external dependencies** — Pure Python stdlib parsing (no numpy/h5py required)
+- **Precipitation type detection** — Distinguishes rain, sleet, freezing rain, snow and likely hail using temperature
+- **Persistent statistics** — Today/yesterday rainfall, dry streak, last rain timestamp and a 30-day history ring buffer
+- **Multiple sensors** — Current rate, intensity class, type, rain start/end timing, totals, maximums, daily aggregates
+- **Four data sources** — Auto (default), DWD raw radar, Bright Sky API, or Open-Meteo (global)
+- **No API key needed** — All backends are free; DWD Open Data is unlimited
+- **No external dependencies** — Pure Python stdlib parsing (no numpy/h5py/pysteps required)
+- **Custom Lovelace card** — Vanilla-JS card with bar chart, status banner and 6 h tail
 - **Dashboard included** — Interactive radar map (RainViewer) + sensor tiles + history
 
 ## Sensors
@@ -26,12 +30,17 @@ High-precision rain radar integration for Home Assistant. Uses DWD (Deutscher We
 |--------|------|-------------|
 | Current precipitation | `sensor` | Current precipitation rate (mm/h) |
 | Precipitation intensity | `sensor` | Classification: none / light / moderate / heavy / violent |
+| Precipitation type | `sensor` | rain / sleet / freezing_rain / snow / hail_likely / unknown |
 | Rain starts in | `sensor` | Minutes until rain begins (null if dry forecast) |
 | Rain ends in | `sensor` | Minutes until rain stops — extrapolates beyond 2h via movement tracking |
 | Max precipitation (1h) | `sensor` | Peak precipitation rate in next 60 minutes |
 | Max precipitation (2h) | `sensor` | Peak precipitation rate in next 120 minutes |
 | Total precipitation (1h) | `sensor` | Accumulated precipitation in next 60 minutes (mm) |
 | Total precipitation (2h) | `sensor` | Accumulated precipitation in next 120 minutes (mm) |
+| Precipitation today | `sensor` | Accumulated precipitation since UTC midnight (mm) |
+| Precipitation yesterday | `sensor` | Total precipitation on the previous UTC day (mm) |
+| Dry streak | `sensor` | Hours since the last rain >= 0.1 mm/h |
+| Last rain at | `sensor` | Timestamp of the most recent rainy update |
 | Raining | `binary_sensor` | Whether it's currently raining |
 | Rain expected | `binary_sensor` | Whether rain is expected in the next 2 hours |
 
@@ -81,17 +90,25 @@ During setup you can configure:
 
 ## Data Sources
 
-### DWD Radar (Recommended for Germany)
+The integration ships four data source modes; pick one in the config flow.
+
+### Auto (default)
+
+Picks **DWD Radar** when your location is inside the DE1200 coverage box
+(Germany + ~150 km of border regions) and **Open-Meteo** elsewhere. The
+recommended default for most users.
+
+### DWD Radar (Germany, highest precision)
 
 Uses raw DWD RADOLAN/RADVOR radar composites:
 - **Resolution**: 1.1 km × 1.1 km grid (polar stereographic projection)
 - **Update interval**: Every 5 minutes
-- **Forecast**: 2 hours (RADVOR nowcast in 5-min steps)
+- **Forecast**: 2 hours from RADVOR + up to 6 h from custom optical-flow extension
 - **Coverage**: Germany + border regions (~150 km beyond borders)
 - **Cost**: Free (DWD Open Data, no API key)
 - **Format**: Binary RADOLAN (parsed with stdlib, no external deps)
 
-### Bright Sky API
+### Bright Sky API (Germany)
 
 JSON wrapper around DWD data:
 - **Resolution**: ~1 km (same underlying DWD data)
@@ -99,6 +116,15 @@ JSON wrapper around DWD data:
 - **Forecast**: Current weather + precipitation
 - **Coverage**: Germany
 - **Cost**: Free
+
+### Open-Meteo (global)
+
+Fulfills the "RainViewer fallback" use case for non-German locations:
+- **Resolution**: 15-minute precipitation forecast (resampled to 5-min buckets)
+- **Update interval**: Every 5 minutes
+- **Forecast**: 6 hours
+- **Coverage**: Worldwide
+- **Cost**: Free, no API key
 
 ## Automation Examples
 
@@ -230,11 +256,11 @@ uv run pytest tests/ -v -k "not network"
 - [x] Polar stereographic coordinate projection
 - [x] Dashboard with interactive radar map
 - [x] Rain end extrapolation beyond 2h via movement tracking
-- [ ] Custom nowcasting with optical flow (pysteps)
-- [ ] RainViewer fallback for non-German locations
-- [ ] Precipitation type detection (rain vs snow vs hail)
-- [ ] Historical data / statistics
-- [ ] Custom Lovelace card with precipitation graph
+- [x] Custom nowcasting with optical flow (stdlib, pysteps-inspired)
+- [x] RainViewer / Open-Meteo fallback for non-German locations
+- [x] Precipitation type detection (rain vs snow vs sleet vs hail)
+- [x] Historical data / statistics (today, yesterday, dry streak, 30-day history)
+- [x] Custom Lovelace card with precipitation graph
 
 ## Contributing
 

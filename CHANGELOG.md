@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-04 - Roadmap completion: optical flow, global coverage, types, stats and Lovelace card
+
 ### Added
 
 - Custom Lovelace card (`dashboard/rain-warner-card.js`) — a single

@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-06-04 - Robust notification card templates
+
+### Fixed
+
+- The walldisplay notification cards now read their values from the
+  triggering binary sensor's own attributes (`rain_starts_at`,
+  `rain_starts_in_minutes`, `max_precipitation_mm_h`,
+  `precipitation_type`, `temperature_c`, `dry_streak_hours`) rather
+  than from separate sensor entities. The integration writes the
+  alert flag and its supporting attributes in the same coordinator
+  pass, so the card never has to handle a half-populated state. Also
+  fixes the empty-card render that happened when manually overriding
+  the alert state for testing while the underlying sensors stayed
+  `unknown`.
+- Templates fall back gracefully ("Regen ab gleich" / "Glatteis-Risiko"
+  without temperature) when an attribute is unexpectedly missing,
+  rather than blowing up silently.
+
 ## [0.6.0] - 2026-06-04 - Alert binary sensors, walldisplay cards, iPhone push, mDNS deploy fix
 
 ### Added

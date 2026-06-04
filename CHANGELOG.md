@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-04 - Reproducible dashboard, axis fix, rain-start bug, card cache-bust
+
+### Added
+
+- `dashboard/rain-warner-dashboard.yaml` is now tracked in git as the
+  canonical dashboard definition. `deploy.sh` pushes it to HA via the
+  WebSocket API when `HA_URL` / `HA_TOKEN` are set, so the dashboard
+  is fully reproducible from a fresh checkout.
+- `tools/ha_update_card_resource.py` rewrites the Lovelace JS resource
+  URL to `/local/rain-warner-card.js?v=<sha>` whenever the card file
+  changes, so browsers reliably pick up new card versions instead of
+  serving the cached copy until manual hard-reload. Helper is
+  idempotent (no-op when the hash already matches) and called from
+  `deploy.sh` automatically.
+- `scripts/seed-dashboard-yaml.py` — one-shot helper used to bootstrap
+  the YAML file from the live HA storage. Useful for future re-seeds.
+
+### Changed
+
+- The bundled dashboard no longer ships the RainViewer iframe. The
+  Rain Warner Card's bar chart visualizes the same information at
+  higher fidelity, so the duplicate map only added visual noise.
+- The card's axis labels (jetzt / +1h / +2h / +6h) are now placed at
+  the actual bar positions instead of evenly spaced. With the 6 h
+  extension active that means '+2h' sits above bar 24 (≈33 % of the
+  chart width) instead of bar 48, matching the visible RADVOR
+  section.
+- The extension half of the chart now has a subtle background band so
+  users can see at a glance where RADVOR ends and the optical-flow
+  extrapolation begins.
+
+### Fixed
+
+- The 'Regen ab' tile and `rain_starts_at` sensor no longer report a
+  positive value while it's already raining. The question 'when does
+  rain start?' is meaningless once it's already raining, so the
+  sensor now returns Unknown in that case. `rain_ends_at` continues
+  to be exposed.
+
 ## [0.4.1] - 2026-06-04 - Configurable restart recovery timeout
 
 ### Changed

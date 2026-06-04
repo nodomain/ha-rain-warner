@@ -34,8 +34,16 @@ class RainWarnerConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Return the options flow so users can switch engine / source later."""
-        return RainWarnerOptionsFlow(config_entry)
+        """Return the options flow so users can switch engine / source later.
+
+        We deliberately don't pass `config_entry` to the constructor:
+        modern Home Assistant (2024.11+) injects `self.config_entry` on
+        the flow handler itself, and `OptionsFlow.__init__` is just
+        `object.__init__` which raises `TypeError` if any positional
+        argument is supplied. Passing it here was the cause of the 500
+        when the user clicked the Configure cog.
+        """
+        return RainWarnerOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""

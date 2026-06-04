@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-06-04 - Actually fix the 500 in the options flow
+
+### Fixed
+
+- The Configure cog still 500'd in 0.6.4 because
+  `async_get_options_flow` was still calling `RainWarnerOptionsFlow(config_entry)`,
+  but with the constructor gone the parent `OptionsFlow.__init__`
+  (= `object.__init__`) rejects the positional argument and raises
+  `TypeError: RainWarnerOptionsFlow() takes no arguments`. Modern Home
+  Assistant injects `self.config_entry` on the handler itself, so the
+  factory now returns `RainWarnerOptionsFlow()` with no args and the
+  options dialog finally opens.
+
 ## [0.6.4] - 2026-06-04 - Fix 500 in options flow on modern HA
 
 ### Fixed

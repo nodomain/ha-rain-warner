@@ -27,7 +27,7 @@
  * No build step required — pure HTMLElement + DOM, ~6 KB minified.
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.0.1";
 
 class RainWarnerCard extends HTMLElement {
   constructor() {

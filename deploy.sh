@@ -184,13 +184,19 @@ fi
 # --- Sync Lovelace card to <config>/www/ ---
 # The custom card is a frontend resource served by HA at /local/...,
 # so it must live in the config volume's www/ directory rather than in
-# custom_components/. We copy it on every deploy so the card and the
-# integration stay in lock-step.
+# custom_components/. We use a content-hashed filename
+# (`rain-warner-card.<hash>.js`) instead of a stable name + ?v=<hash>
+# query string: aggressive PWA / mobile-app caches (HA Companion on
+# iOS in particular) sometimes ignore query strings and keep serving
+# the old module — a different *path* is the only thing they reliably
+# treat as a fresh resource. Stale hashed copies and the legacy
+# unhashed file are removed on every deploy.
 CARD_SRC="$SCRIPT_DIR/dashboard/rain-warner-card.js"
 CARD_DEST_DIR="$TARGET/www"
-CARD_DEST="$CARD_DEST_DIR/rain-warner-card.js"
 
 if [[ -f "$CARD_SRC" ]]; then
+  CARD_HASH=$(shasum -a 256 "$CARD_SRC" | awk '{print $1}' | cut -c1-8)
+  CARD_DEST="$CARD_DEST_DIR/rain-warner-card.$CARD_HASH.js"
   mkdir -p "$CARD_DEST_DIR"
   CARD_OUT=$(rsync -ci --inplace --no-perms --no-owner --no-group \
     "$CARD_SRC" "$CARD_DEST" 2>&1) || {
@@ -203,21 +209,34 @@ if [[ -f "$CARD_SRC" ]]; then
     echo "✅ Lovelace card synced to $CARD_DEST"
   else
     card_changed=false
-    echo "✅ Lovelace card up-to-date"
+    echo "✅ Lovelace card up-to-date ($CARD_DEST)"
   fi
+
+  # Cleanup older hashed copies and the legacy unhashed file. The glob
+  # `rain-warner-card.*.js` matches `rain-warner-card.<anything>.js` but
+  # NOT `rain-warner-card.js` (which only has one dot), so we handle
+  # both cases. nullglob keeps the loop quiet when nothing matches.
+  shopt -s nullglob
+  for old in "$CARD_DEST_DIR"/rain-warner-card.*.js "$CARD_DEST_DIR"/rain-warner-card.js; do
+    if [[ -f "$old" && "$old" != "$CARD_DEST" ]]; then
+      rm -f "$old" && echo "🗑  removed stale card copy: $(basename "$old")"
+    fi
+  done
+  shopt -u nullglob
 else
   card_changed=false
   echo "ℹ️  No Lovelace card found at $CARD_SRC — skipping."
 fi
 
-# --- Optional: cache-bust the Lovelace JS resource via WebSocket API ---
-# Browsers cache /local/*.js aggressively because HA doesn't emit useful
-# cache headers. After deploying a new card we update the resource URL
-# to /local/rain-warner-card.js?v=<sha>, but only when the file actually
-# changed (the helper is idempotent).
+# --- Optional: update the Lovelace JS resource URL via WebSocket API ---
+# Path-based cache busting: the resource points at
+# `/local/rain-warner-card.<hash>.js`. The helper finds whichever
+# variant of the resource is currently registered (legacy unhashed,
+# old `?v=...` query string, or older hash) and rewrites it to the
+# current hashed path. Idempotent when the hash already matches.
 cache_bust_card() {
   local card_file="$CARD_SRC"
-  local base_url="/local/rain-warner-card.js"
+  local stem_url="/local/rain-warner-card"
   local helper="$SCRIPT_DIR/tools/ha_update_card_resource.py"
 
   if [[ ! -f "$card_file" ]]; then
@@ -232,8 +251,8 @@ cache_bust_card() {
     return 0
   fi
   echo ""
-  echo "🔄 Cache-busting Lovelace resource $base_url ..."
-  "$helper" "$base_url" "$card_file"
+  echo "🔄 Updating Lovelace resource for $stem_url ..."
+  "$helper" "$stem_url" "$card_file"
 }
 
 if [[ -n "${HA_URL:-}" && -n "${HA_TOKEN:-}" ]]; then

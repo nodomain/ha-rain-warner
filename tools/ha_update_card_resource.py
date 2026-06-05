@@ -5,22 +5,29 @@
 #     "websockets>=12",
 # ]
 # ///
-"""Cache-bust a Lovelace JS resource by hashing its content into the URL.
+"""Path-based cache-busting for a Lovelace JS resource.
 
-Browsers cache `/local/foo.js` aggressively because Home Assistant doesn't
-emit useful cache headers. After deploying a new version of a custom card,
-clients keep running the old JS until they hard-reload. This tool reads
-the card file, computes a short content hash, and rewrites the matching
-Lovelace resource URL to `/local/foo.js?v=<hash>` — but only when the
-hash actually changed, so it's a safe no-op on repeat runs.
+Computes a short content hash from a local card file and rewrites the
+matching Lovelace resource URL to `<stem>.<hash>.js`. Path-based cache
+busting beats `?v=<hash>` query strings because aggressive PWA / mobile
+app caches (notably the HA Companion on iOS) sometimes ignore query
+parameters when matching cached responses, so the *only* thing they
+reliably treat as a fresh resource is a different filename.
+
+The helper is idempotent: when the hash already matches what's
+registered it makes no changes. It also handles the legacy URL shapes
+(unhashed `/local/foo.js`, query-string `/local/foo.js?v=abc`) so the
+first run after switching to path-based cache busting just bumps the
+existing entry instead of leaving a duplicate behind.
 
 Usage:
     HA_URL=http://ha.local:8123 HA_TOKEN=<long-lived> \\
-        ./tools/ha_update_card_resource.py /local/<file>.js <local_path>
+        ./tools/ha_update_card_resource.py /local/<stem> <local_path>
 
-Example:
-    ./tools/ha_update_card_resource.py /local/rain-warner-card.js \\
-        dashboard/rain-warner-card.js
+Where `<stem>` is the URL without the hash or extension, e.g.:
+    /local/rain-warner-card
+
+The resulting target URL is `/local/rain-warner-card.<hash>.js`.
 
 Environment:
     HA_URL    Base URL of Home Assistant (http:// or https://).
@@ -33,6 +40,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -48,11 +56,26 @@ async def _send(ws, request: dict) -> dict:
     return json.loads(await ws.recv())
 
 
-async def update_card_resource(ws_url: str, token: str, base_url: str, content_hash: str) -> str:
+def _matcher(stem_url: str) -> re.Pattern:
+    """Match any URL that points at the same logical card.
+
+    Accepts the legacy unhashed URL (`<stem>.js`), the old query-string
+    cache-bust (`<stem>.js?v=...`) and the new hashed path
+    (`<stem>.<hash>.js`). The trailing query string is optional so a
+    user who manually appended one still matches.
+    """
+    escaped = re.escape(stem_url)
+    return re.compile(rf"^{escaped}(?:\.[0-9a-f]+)?\.js(?:\?.*)?$")
+
+
+async def update_card_resource(ws_url: str, token: str, stem_url: str, content_hash: str) -> str:
     """Update (or insert) a Lovelace JS resource so its URL ends with the hash.
 
     Returns a human-readable status string.
     """
+    target_url = f"{stem_url}.{content_hash}.js"
+    pattern = _matcher(stem_url)
+
     async with asyncio.timeout(CONNECT_TIMEOUT_S + OPERATION_TIMEOUT_S):
         async with websockets.connect(ws_url) as ws:
             greeting = json.loads(await ws.recv())
@@ -69,14 +92,12 @@ async def update_card_resource(ws_url: str, token: str, base_url: str, content_h
             if not list_response.get("success", False):
                 raise RuntimeError(f"Couldn't list resources: {list_response}")
 
-            target_url = f"{base_url}?v={content_hash}"
             existing = next(
-                (r for r in list_response["result"] if r["url"].split("?", 1)[0] == base_url),
+                (r for r in list_response["result"] if pattern.match(r["url"])),
                 None,
             )
 
             if existing is None:
-                # Resource doesn't exist yet — create it.
                 create_response = await _send(
                     ws,
                     {
@@ -113,7 +134,15 @@ def main() -> int:
         print(__doc__, file=sys.stderr)
         return 2
 
-    base_url, file_path = sys.argv[1], sys.argv[2]
+    stem_url, file_path = sys.argv[1], sys.argv[2]
+
+    if stem_url.endswith(".js"):
+        print(
+            f"\u274c <stem-url> must NOT end in .js (got: {stem_url!r}). "
+            "Pass the URL prefix without extension, e.g. '/local/rain-warner-card'.",
+            file=sys.stderr,
+        )
+        return 2
 
     ha_url = os.environ.get("HA_URL", "").rstrip("/")
     token = os.environ.get("HA_TOKEN", "")
@@ -141,7 +170,7 @@ def main() -> int:
     content_hash = hashlib.sha256(file.read_bytes()).hexdigest()[:8]
 
     try:
-        status = asyncio.run(update_card_resource(ws_url, token, base_url, content_hash))
+        status = asyncio.run(update_card_resource(ws_url, token, stem_url, content_hash))
     except asyncio.TimeoutError:
         print(
             f"\u274c Timed out talking to {ha_url} (\u2265 "

@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-06-04 - Path-based cache busting for the Lovelace card
+
+### Changed
+
+- The Lovelace card is now deployed under a content-hashed filename
+  (`/config/www/rain-warner-card.<hash>.js`) and the registered
+  Lovelace resource URL points at that exact path — no more
+  `?v=<hash>` query string. Aggressive PWA / mobile-app caches
+  (notably the HA Companion app on iOS) sometimes ignore query
+  parameters when matching cached responses, so the only reliable way
+  to force a re-fetch is a different filename. `deploy.sh` now also
+  removes stale hashed copies and the legacy unhashed file from
+  `www/` on every deploy so nothing piles up over time.
+- `tools/ha_update_card_resource.py` now takes a stem URL
+  (`/local/rain-warner-card`) instead of a full filename and
+  reconciles whichever variant is currently registered (legacy
+  unhashed, old query-string cache-bust, or older hashed path) into
+  the new hashed path. Idempotent on repeat runs.
+- Bumped `CARD_VERSION` in the card source to `1.0.1` so the console
+  banner reflects the change.
+
 ## [0.6.6] - 2026-06-04 - Don't retry failed pysteps installs every boot
 
 ### Changed

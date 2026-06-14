@@ -35,7 +35,7 @@ from .const import (
     PRECIP_THRESHOLD_MODERATE,
     PRECIP_THRESHOLD_VIOLENT,
 )
-from .dwd_radar import DWDRadarClient
+from .dwd_radar import DWDRadarClient, RadolanFrame
 from .open_meteo import OpenMeteoClient, is_in_dwd_coverage
 from .precip_type import classify as classify_precip_type
 from .stats import RainStatistics
@@ -102,6 +102,9 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.data_source != DATA_SOURCE_OPEN_METEO:
             self._temperature_provider = TemperatureProvider(hass, self.latitude, self.longitude)
 
+        # Last parsed radar frames for the camera entity to render.
+        self._last_frames: list[RadolanFrame] = []
+
         # Persistent rain statistics (today/yesterday/dry streak/history).
         self._stats_store: Store = Store(
             hass,
@@ -110,6 +113,12 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._stats: RainStatistics = RainStatistics()
         self._stats_loaded = False
+
+        # Exponential moving average of the motion vector across updates.
+        # Raw TREC vectors are the instantaneous trend and jitter between
+        # 5-min updates; COTREC/MTREC-style continuity smoothing stabilizes
+        # the displayed direction. Stored as (dr_per_min, dc_per_min).
+        self._motion_ema: tuple[float, float] | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the radar source."""
@@ -123,6 +132,10 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             raise UpdateFailed(f"Error fetching rain radar data: {err}") from err
 
+        # Store frames for the camera entity (DWD backend only).
+        if hasattr(self._client, "last_frames"):
+            self._last_frames = self._client.last_frames or []
+
         # Enrich with air temperature when the backend doesn't provide one.
         if data.get("temperature_c") is None and self._temperature_provider is not None:
             data["temperature_c"] = await self._temperature_provider.async_get()
@@ -134,11 +147,38 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return self._process_data(data)
 
+    @property
+    def last_frames(self) -> list[RadolanFrame]:
+        """Return the last set of parsed radar frames for image rendering."""
+        return self._last_frames
+
+    @property
+    def grid_row(self) -> int:
+        """Return the grid row of the user's location."""
+        if hasattr(self._client, "_grid_row"):
+            return self._client._grid_row
+        return 0
+
+    @property
+    def grid_col(self) -> int:
+        """Return the grid column of the user's location."""
+        if hasattr(self._client, "_grid_col"):
+            return self._client._grid_col
+        return 0
+
+    @property
+    def radius_cells(self) -> int:
+        """Return the monitoring radius in grid cells."""
+        if hasattr(self._client, "_radius_cells"):
+            return self._client._radius_cells
+        return 5
+
     def _process_data(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Process raw radar data into structured forecast."""
         forecast = raw_data.get("forecast", {})
         forecast_extended = raw_data.get("forecast_extended", forecast)
         current = raw_data.get("current_precipitation", 0.0)
+        motion = self._smooth_motion(raw_data.get("motion"))
         max_2h = self._max_precip(forecast, 120)
         max_6h = self._max_precip(forecast_extended, 360)
         temperature_c = raw_data.get("temperature_c")
@@ -186,7 +226,7 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "total_precipitation_next_hour": raw_data.get("total_next_hour", 0.0),
             "total_precipitation_next_2h": raw_data.get("total_next_2h", 0.0),
             "temperature_c": temperature_c,
-            "motion": raw_data.get("motion"),
+            "motion": motion,
             "precipitation_today_mm": self._stats.precipitation_today_mm,
             "precipitation_yesterday_mm": self._stats.precipitation_yesterday_mm,
             "dry_streak_hours": dry_streak_hours,
@@ -198,6 +238,47 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "extended_dry_spell": extended_dry_spell,
             "last_updated": raw_data.get("timestamp"),
             "data_source": self.data_source,
+        }
+
+    # Smoothing factor for the motion EMA. 0.4 = 40 % weight on the newest
+    # vector, so the arrow tracks genuine direction changes within ~3
+    # updates (~15 min) while rejecting single-update jitter.
+    _MOTION_EMA_ALPHA = 0.4
+
+    def _smooth_motion(self, motion: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Temporally smooth the raw motion vector with an EMA.
+
+        Raw TREC vectors jitter from update to update. We blend the new
+        per-minute vector components with the running average and recompute
+        speed/direction from the smoothed components. When the new estimate
+        is missing (too dry to track) we drop the EMA so a stale arrow does
+        not linger once the rain has gone.
+        """
+        if not motion:
+            self._motion_ema = None
+            return None
+
+        dr = motion.get("dr_per_min")
+        dc = motion.get("dc_per_min")
+        if dr is None or dc is None:
+            self._motion_ema = None
+            return motion
+
+        if self._motion_ema is None:
+            smoothed_dr, smoothed_dc = dr, dc
+        else:
+            prev_dr, prev_dc = self._motion_ema
+            a = self._MOTION_EMA_ALPHA
+            smoothed_dr = a * dr + (1.0 - a) * prev_dr
+            smoothed_dc = a * dc + (1.0 - a) * prev_dc
+
+        self._motion_ema = (smoothed_dr, smoothed_dc)
+
+        speed_cells_per_min = (smoothed_dr**2 + smoothed_dc**2) ** 0.5
+        return {
+            "dr_per_min": smoothed_dr,
+            "dc_per_min": smoothed_dc,
+            "speed_kmh": speed_cells_per_min * 1.1 * 60.0,
         }
 
     @staticmethod

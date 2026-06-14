@@ -2,7 +2,7 @@ views:
   - sections:
       - cards:
           - type: iframe
-            url: /local/rain-warner-map.html?v=11
+            url: /local/rain-warner-map.html?v=12
             aspect_ratio: "4:3"
             layout_options:
               grid_columns: 4
@@ -72,3 +72,11 @@ views:
     title: Regenradar
     max_columns: 2
     type: sections
+  - title: Radarkarte
+    path: radar-fullscreen
+    type: panel
+    subview: true
+    cards:
+      - type: iframe
+        url: /local/rain-warner-map.html?v=12
+        aspect_ratio: "100%"

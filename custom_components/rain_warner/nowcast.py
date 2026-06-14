@@ -93,8 +93,11 @@ def estimate_motion(
     """Estimate global motion (cells per minute) between two frames.
 
     Uses a brute-force minimum-L1 search over integer cell shifts on a
-    decimated sub-window. Returns None when neither frame contains rain
-    or motion cannot be reliably estimated.
+    decimated sub-window (the TREC method — Tracking Radar Echoes by
+    Correlation), followed by parabolic sub-pixel refinement around the
+    cost minimum so the resulting direction is continuous rather than
+    quantized to whole-cell steps. Returns None when neither frame
+    contains rain or motion cannot be reliably estimated.
     """
     dt = frame_b.forecast_minutes - frame_a.forecast_minutes
     if dt <= 0:
@@ -109,6 +112,10 @@ def estimate_motion(
     if rain_a < 25 or rain_b < 25:
         return None
 
+    # Cost grid over the full integer shift search space, so we can do
+    # parabolic sub-pixel refinement around the minimum afterwards.
+    n = 2 * search_range + 1
+    cost_grid = [[float("inf")] * n for _ in range(n)]
     best_cost = float("inf")
     best_shift: tuple[int, int] = (0, 0)
 
@@ -135,6 +142,7 @@ def estimate_motion(
                 continue
             # Normalize by count so larger overlap regions are not penalized.
             normalized = cost / count
+            cost_grid[dr + search_range][dc + search_range] = normalized
             if normalized < best_cost:
                 best_cost = normalized
                 best_shift = (dr, dc)
@@ -142,9 +150,105 @@ def estimate_motion(
     if best_cost == float("inf"):
         return None
 
-    dr_per_min = best_shift[0] / dt
-    dc_per_min = best_shift[1] / dt
+    best_dr, best_dc = best_shift
+
+    # A minimum sitting on the search boundary means the true shift is
+    # larger than we can resolve — the vector is unreliable (it "rails").
+    if abs(best_dr) == search_range or abs(best_dc) == search_range:
+        _LOGGER.debug(
+            "Motion estimate railed at search boundary (%d, %d) — discarding",
+            best_dr,
+            best_dc,
+        )
+        return None
+
+    # Parabolic sub-pixel refinement on each axis using the cost at the
+    # minimum and its two neighbours: delta = 0.5*(C- - C+)/(C- - 2C0 + C+)
+    refined_dr = best_dr + _parabolic_offset(
+        cost_grid[best_dr + search_range - 1][best_dc + search_range],
+        best_cost,
+        cost_grid[best_dr + search_range + 1][best_dc + search_range],
+    )
+    refined_dc = best_dc + _parabolic_offset(
+        cost_grid[best_dr + search_range][best_dc + search_range - 1],
+        best_cost,
+        cost_grid[best_dr + search_range][best_dc + search_range + 1],
+    )
+
+    dr_per_min = refined_dr / dt
+    dc_per_min = refined_dc / dt
     return dr_per_min, dc_per_min
+
+
+def _parabolic_offset(c_minus: float, c_zero: float, c_plus: float) -> float:
+    """Sub-pixel peak offset in [-0.5, 0.5] from a 3-point parabola fit.
+
+    Returns 0.0 when the neighbours are not finite or the curvature is
+    degenerate (flat or non-convex), in which case the integer minimum
+    is already the best estimate.
+    """
+    if c_minus == float("inf") or c_plus == float("inf"):
+        return 0.0
+    denom = c_minus - 2.0 * c_zero + c_plus
+    if denom <= 1e-9:
+        return 0.0
+    offset = 0.5 * (c_minus - c_plus) / denom
+    # Clamp to the neighbouring cells — a well-behaved parabola peak.
+    return max(-0.5, min(0.5, offset))
+
+
+def estimate_motion_multipair(
+    frames: list[RadolanFrame],
+    center_row: int,
+    center_col: int,
+    pair_gap_minutes: int = 30,
+) -> tuple[float, float] | None:
+    """Robust motion estimate by averaging several frame pairs.
+
+    A single TREC vector is the instantaneous trend and is noisy
+    (per the COTREC/MTREC literature). We estimate motion over several
+    pairs spaced ``pair_gap_minutes`` apart across the available window
+    and average the per-minute vectors, which both averages out
+    quantization noise and rejects outlier pairs. The gap is chosen so
+    the inter-frame shift stays inside the search range at typical front
+    speeds (~30 min → ≲10 cells at 60 km/h).
+    """
+    if len(frames) < 2:
+        return None
+
+    # Map forecast_minutes → frame for gap-based pairing.
+    by_minute = {f.forecast_minutes: f for f in frames}
+    minutes_sorted = sorted(by_minute.keys())
+    step = minutes_sorted[1] - minutes_sorted[0] if len(minutes_sorted) > 1 else 5
+    gap_steps = max(1, round(pair_gap_minutes / step))
+
+    vectors: list[tuple[float, float]] = []
+    for i in range(len(minutes_sorted) - gap_steps):
+        fa = by_minute[minutes_sorted[i]]
+        fb = by_minute[minutes_sorted[i + gap_steps]]
+        motion = estimate_motion(fa, fb, center_row, center_col)
+        if motion is not None:
+            vectors.append(motion)
+
+    if not vectors:
+        return None
+
+    # Component-wise mean (vector average — robust to angle wrap, weights
+    # by magnitude). Reject vectors more than 2× the median magnitude away
+    # to drop gross outliers before averaging.
+    mags = sorted((dr**2 + dc**2) ** 0.5 for dr, dc in vectors)
+    median_mag = mags[len(mags) // 2]
+    kept = [
+        (dr, dc)
+        for dr, dc in vectors
+        if median_mag <= 0 or (dr**2 + dc**2) ** 0.5 <= 2.5 * median_mag
+    ]
+    if not kept:
+        kept = vectors
+
+    mean_dr = sum(dr for dr, _ in kept) / len(kept)
+    mean_dc = sum(dc for _, dc in kept) / len(kept)
+    return mean_dr, mean_dc
 
 
 def advected_precipitation(
@@ -191,12 +295,9 @@ def extend_forecast(
     if last.forecast_minutes >= horizon_minutes:
         return forecast, None
 
-    # Estimate motion from a robust mid-to-late frame pair.
-    # Skip the very first frame (often noisier) and use frames separated by
-    # ~30 min so the shift is several cells (better signal-to-noise).
-    pair_a = frames[len(frames) // 3]
-    pair_b = frames[-1]
-    motion = estimate_motion(pair_a, pair_b, target_row, target_col)
+    # Estimate motion robustly by averaging several frame pairs across the
+    # window (reduces TREC quantization noise + rejects outlier pairs).
+    motion = estimate_motion_multipair(frames, target_row, target_col)
     if motion is None:
         return forecast, None
 

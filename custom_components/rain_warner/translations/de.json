@@ -36,6 +36,11 @@
           "unknown": "Unbekannt"
         }
       }
+    },
+    "camera": {
+      "radar_image": {
+        "name": "Radarbild"
+      }
     }
   }
 }

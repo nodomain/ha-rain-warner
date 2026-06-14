@@ -304,6 +304,9 @@ class DWDRadarClient:
             self._radius_cells,
         )
 
+        # Last parsed frames (stored for camera entity rendering).
+        self.last_frames: list[RadolanFrame] = []
+
     async def async_get_data(self) -> dict[str, Any]:
         """Fetch current radar data and nowcast forecast."""
         archive_bytes = await self._download_archive()
@@ -320,6 +323,7 @@ class DWDRadarClient:
 
         if not frames:
             _LOGGER.warning("No valid frames found in radar archive")
+            self.last_frames = []
             return {
                 "current_precipitation": 0.0,
                 "forecast": {},
@@ -327,6 +331,9 @@ class DWDRadarClient:
                 "total_next_2h": 0.0,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
+
+        # Store frames for camera entity rendering.
+        self.last_frames = frames
 
         # Extract precipitation at our location from each frame
         current = 0.0

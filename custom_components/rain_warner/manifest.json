@@ -3,6 +3,7 @@
   "name": "Rain Warner",
   "codeowners": ["@nodomain"],
   "config_flow": true,
+  "dependencies": ["http"],
   "documentation": "https://github.com/nodomain/ha-rain-warner",
   "integration_type": "service",
   "iot_class": "cloud_polling",

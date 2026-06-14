@@ -11,10 +11,11 @@ from homeassistant.requirements import RequirementsNotFound, async_process_requi
 
 from .const import CONF_NOWCAST_ENGINE, DOMAIN, NOWCAST_ENGINE_PYSTEPS, OPT_PYSTEPS_INSTALL_FAILED
 from .coordinator import RainWarnerCoordinator
+from .wms_proxy import async_register_proxy
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CAMERA]
 
 # Heavy optional dependency installed on-demand only when the user picks
 # the pysteps engine. Pinning the lower bound avoids surprise breakage
@@ -63,6 +64,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    # Register WMS proxy (once per HA instance)
+    if not hass.data[DOMAIN].get("_proxy_registered"):
+        async_register_proxy(hass)
+        hass.data[DOMAIN]["_proxy_registered"] = True
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

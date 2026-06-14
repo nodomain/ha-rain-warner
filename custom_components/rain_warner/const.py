@@ -23,6 +23,19 @@ PRECIP_THRESHOLD_MODERATE = 2.5
 PRECIP_THRESHOLD_HEAVY = 7.6
 PRECIP_THRESHOLD_VIOLENT = 50.0
 
+# Minimum rate to count as "raining" — anything below is treated as
+# radar noise / clutter. Matches the WMO definition of measurable
+# precipitation (>= 0.1 mm/h). Also used as the floor for forecast
+# steps when computing rain_starts_in / rain_ends_in.
+PRECIP_THRESHOLD_MEASURABLE = 0.1
+
+# Minimum forecasted peak rate within the imminent window to trigger
+# the rain_imminent alert. Prevents alarm fatigue from trace amounts
+# (0.1 mm/h = barely detectable drizzle). Set to "light but noticeable"
+# so only rain worth acting on (closing awning, taking laundry in)
+# triggers a push.
+RAIN_IMMINENT_MIN_RATE = 0.3
+
 # Configuration keys
 CONF_LATITUDE = "latitude"
 CONF_LONGITUDE = "longitude"

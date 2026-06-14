@@ -4,7 +4,7 @@ Pure-logic helpers that turn the coordinator's processed data into the
 four binary alert states surfaced as binary sensors and used in
 walldisplay notifications and automations:
 
-  rain_imminent       : dry now, but rain in <= 30 minutes
+  rain_imminent       : dry now, but rain >= 0.3 mm/h in <= 30 minutes
   severe_weather      : heavy/violent rain or hail likelihood
   winter_weather      : snow / sleet / freezing rain detected
   extended_dry_spell  : >= 7 days without rain and no rain in forecast
@@ -15,7 +15,7 @@ without mocking the coordinator.
 
 from __future__ import annotations
 
-from .const import PRECIP_THRESHOLD_HEAVY
+from .const import PRECIP_THRESHOLD_HEAVY, RAIN_IMMINENT_MIN_RATE
 
 # When does "rain coming soon" trigger the imminent flag?
 RAIN_IMMINENT_THRESHOLD_MINUTES = 30
@@ -30,11 +30,19 @@ WINTER_TYPES = frozenset({"snow", "sleet", "freezing_rain"})
 def is_rain_imminent(
     is_raining: bool,
     rain_start_minutes: int | None,
+    max_rate_in_window: float = 0.0,
 ) -> bool:
-    """Rain expected within the imminent-window and not currently falling."""
+    """Rain expected within the imminent-window and not currently falling.
+
+    Only triggers when the forecasted peak rate within the window is at
+    least RAIN_IMMINENT_MIN_RATE (0.3 mm/h) — trace amounts that you
+    wouldn't notice outdoors don't deserve a push notification.
+    """
     if is_raining or rain_start_minutes is None:
         return False
-    return 0 < rain_start_minutes <= RAIN_IMMINENT_THRESHOLD_MINUTES
+    if rain_start_minutes <= 0 or rain_start_minutes > RAIN_IMMINENT_THRESHOLD_MINUTES:
+        return False
+    return max_rate_in_window >= RAIN_IMMINENT_MIN_RATE
 
 
 def is_severe_weather(

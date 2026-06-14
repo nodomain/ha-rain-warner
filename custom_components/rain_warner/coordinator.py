@@ -32,6 +32,7 @@ from .const import (
     NOWCAST_ENGINE_SIMPLE,
     PRECIP_THRESHOLD_HEAVY,
     PRECIP_THRESHOLD_LIGHT,
+    PRECIP_THRESHOLD_MEASURABLE,
     PRECIP_THRESHOLD_MODERATE,
     PRECIP_THRESHOLD_VIOLENT,
 )
@@ -187,7 +188,7 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         rain_end_extrapolated = raw_data.get("rain_end_extrapolated")
         intensity = self._classify_intensity(current)
         precip_type = classify_precip_type(current, temperature_c, max_2h)
-        is_raining = current > 0.0
+        is_raining = current >= PRECIP_THRESHOLD_MEASURABLE
 
         # Convert relative minutes into absolute timestamps so users see
         # "rain ends at 18:42" instead of having to add minutes in their
@@ -203,7 +204,8 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Derived alert flags. Each flips a binary sensor users wire into
         # walldisplay notifications, automations and push messages.
-        rain_imminent = is_rain_imminent(is_raining, rain_start_minutes)
+        max_30min = self._max_precip(forecast, 30)
+        rain_imminent = is_rain_imminent(is_raining, rain_start_minutes, max_30min)
         severe_weather = is_severe_weather(intensity, max_2h, precip_type)
         winter_weather = is_winter_weather(precip_type)
         extended_dry_spell = is_extended_dry_spell(dry_streak_hours, max_6h)
@@ -325,11 +327,14 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             - It's already raining (start time is now / in the past, so the
               question doesn't make sense)
             - No rain anywhere in the forecast window
+
+        Only forecast steps >= PRECIP_THRESHOLD_MEASURABLE (0.1 mm/h) count
+        as rain starting — trace amounts below that are radar noise.
         """
-        if current_precipitation > 0.0:
+        if current_precipitation >= PRECIP_THRESHOLD_MEASURABLE:
             return None
         for minutes in sorted(forecast.keys()):
-            if forecast[minutes] > 0.0:
+            if forecast[minutes] >= PRECIP_THRESHOLD_MEASURABLE:
                 return minutes
         return None
 
@@ -341,10 +346,13 @@ class RainWarnerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             - Minutes until rain stops (if rain ends within forecast window)
             - -1 if it's raining but doesn't stop within the forecast window
             - None if it's not raining at all (now or in forecast)
+
+        Uses PRECIP_THRESHOLD_MEASURABLE as the floor — trace amounts
+        below 0.1 mm/h are not considered "raining".
         """
-        raining = current_precipitation > 0.0
+        raining = current_precipitation >= PRECIP_THRESHOLD_MEASURABLE
         for minutes in sorted(forecast.keys()):
-            if forecast[minutes] > 0.0:
+            if forecast[minutes] >= PRECIP_THRESHOLD_MEASURABLE:
                 raining = True
             elif raining:
                 return minutes

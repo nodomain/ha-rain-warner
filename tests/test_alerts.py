@@ -17,23 +17,31 @@ from rain_warner.alerts import (
 
 class TestRainImminent:
     def test_on_when_dry_and_rain_in_30_min(self):
-        assert is_rain_imminent(False, 15) is True
-        assert is_rain_imminent(False, 30) is True
+        assert is_rain_imminent(False, 15, max_rate_in_window=1.0) is True
+        assert is_rain_imminent(False, 30, max_rate_in_window=0.5) is True
 
     def test_off_when_already_raining(self):
-        assert is_rain_imminent(True, 5) is False
+        assert is_rain_imminent(True, 5, max_rate_in_window=2.0) is False
 
     def test_off_when_rain_too_far_away(self):
-        assert is_rain_imminent(False, 60) is False
-        assert is_rain_imminent(False, 31) is False
+        assert is_rain_imminent(False, 60, max_rate_in_window=5.0) is False
+        assert is_rain_imminent(False, 31, max_rate_in_window=5.0) is False
 
     def test_off_when_no_rain_in_forecast(self):
-        assert is_rain_imminent(False, None) is False
+        assert is_rain_imminent(False, None, max_rate_in_window=0.0) is False
 
     def test_off_when_rain_at_zero(self):
         # Defensive: minutes=0 means "now" which the rain_imminent
         # semantic ("approaching but not arrived") shouldn't claim.
-        assert is_rain_imminent(False, 0) is False
+        assert is_rain_imminent(False, 0, max_rate_in_window=1.0) is False
+
+    def test_off_when_rate_below_threshold(self):
+        # Trace amounts (< 0.3 mm/h) should NOT trigger imminent alert
+        assert is_rain_imminent(False, 10, max_rate_in_window=0.1) is False
+        assert is_rain_imminent(False, 10, max_rate_in_window=0.2) is False
+
+    def test_on_at_threshold(self):
+        assert is_rain_imminent(False, 10, max_rate_in_window=0.3) is True
 
 
 class TestSevereWeather:

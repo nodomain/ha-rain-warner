@@ -1,6 +1,12 @@
 views:
   - sections:
       - cards:
+          - type: heading
+            heading: Radarkarte
+            icon: mdi:fullscreen
+            tap_action:
+              action: navigate
+              navigation_path: /rain-warner/radar-fullscreen
           - type: iframe
             url: /local/rain-warner-map.html?v=12
             aspect_ratio: "4:3"

@@ -335,24 +335,7 @@
                     if (!document.hidden) refresh();
                 });
 
-                // Fullscreen navigation: when embedded in an iframe (small
-                // dashboard card), clicking the expand button navigates the
-                // parent HA frontend to the fullscreen panel subview.
-                if (window.parent !== window) {
-                    const btn = document.createElement("div");
-                    btn.innerHTML = "⛶";
-                    btn.title = "Vollbild";
-                    btn.style.cssText =
-                        "position:fixed;top:8px;right:8px;z-index:9999;" +
-                        "background:rgba(0,0,0,0.6);color:#fff;font-size:20px;" +
-                        "width:32px;height:32px;display:flex;align-items:center;" +
-                        "justify-content:center;border-radius:4px;cursor:pointer;";
-                    btn.addEventListener("click", () => {
-                        window.parent.location.href =
-                            "/rain-warner/radar-fullscreen";
-                    });
-                    document.body.appendChild(btn);
-                }
+                // No expand button needed — navigation handled by dashboard card
             })();
         </script>
     </body>

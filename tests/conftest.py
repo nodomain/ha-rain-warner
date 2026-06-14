@@ -15,8 +15,11 @@ _MOCK_MODULES = [
     "homeassistant.helpers.storage",
     "homeassistant.helpers.update_coordinator",
     "homeassistant.requirements",
+    "homeassistant.components",
+    "homeassistant.components.http",
     "homeassistant.components.sensor",
     "homeassistant.components.binary_sensor",
+    "homeassistant.components.camera",
     "homeassistant.helpers.entity_platform",
     "aiohttp",
 ]

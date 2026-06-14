@@ -13,6 +13,7 @@ from rain_warner.dwd_radar import RadolanFrame
 from rain_warner.nowcast import (
     advected_precipitation,
     estimate_motion,
+    estimate_motion_multipair,
     extend_forecast,
     make_synthetic_frame_data,
 )
@@ -93,8 +94,64 @@ class TestEstimateMotion:
         motion = estimate_motion(frame_a, frame_b, center_row=20, center_col=20, radius=15)
         assert motion is None
 
+    def test_rails_at_search_boundary_returns_none(self):
+        """A shift larger than the search range rails and must be rejected."""
+        h = w = 120
+        # Shift +20 cols in 5 min — far beyond the default search_range=15.
+        rain_a = [(60 + dr, 30 + dc) for dr in range(-3, 4) for dc in range(-3, 4)]
+        rain_b = [(60 + dr, 50 + dc) for dr in range(-3, 4) for dc in range(-3, 4)]
+        frame_a = _make_frame(0, h, w, rain_a)
+        frame_b = _make_frame(5, h, w, rain_b)
 
-class TestAdvectedPrecipitation:
+        motion = estimate_motion(
+            frame_a, frame_b, center_row=60, center_col=40, radius=40, search_range=15
+        )
+        # The true shift (20 cols) exceeds the boundary → unreliable → None.
+        assert motion is None
+
+    def test_subpixel_resolves_fractional_direction(self):
+        """Sub-pixel refinement yields a continuous (non-integer) vector."""
+        h = w = 120
+        # Shift that does not divide evenly: +7 rows, +3 cols over 40 min.
+        rain_a = [(50 + dr, 50 + dc) for dr in range(-4, 5) for dc in range(-4, 5)]
+        rain_b = [(57 + dr, 53 + dc) for dr in range(-4, 5) for dc in range(-4, 5)]
+        frame_a = _make_frame(0, h, w, rain_a)
+        frame_b = _make_frame(40, h, w, rain_b)
+
+        motion = estimate_motion(frame_a, frame_b, center_row=53, center_col=51, radius=45)
+        assert motion is not None
+        dr_per_min, dc_per_min = motion
+        assert dr_per_min == pytest.approx(7 / 40, abs=0.04)
+        assert dc_per_min == pytest.approx(3 / 40, abs=0.04)
+
+
+class TestEstimateMotionMultipair:
+    """Test the robust multi-pair averaged motion estimate."""
+
+    def test_averages_consistent_motion(self):
+        """A steadily moving block across many frames yields a stable vector."""
+        h = w = 140
+        frames = []
+        # Block moves +2 cols and +1 row per 5-min step (consistent drift).
+        for i, minutes in enumerate(range(0, 125, 5)):
+            cr, cc = 60 + i, 40 + 2 * i
+            rain = [(cr + dr, cc + dc) for dr in range(-3, 4) for dc in range(-3, 4)]
+            frames.append(_make_frame(minutes, h, w, rain))
+
+        motion = estimate_motion_multipair(frames, center_row=70, center_col=60)
+        assert motion is not None
+        dr_per_min, dc_per_min = motion
+        # +1 row / 5 min = 0.2, +2 cols / 5 min = 0.4
+        assert dr_per_min == pytest.approx(0.2, abs=0.06)
+        assert dc_per_min == pytest.approx(0.4, abs=0.06)
+
+    def test_returns_none_without_rain(self):
+        """No rain anywhere → no vector."""
+        h = w = 80
+        frames = [_make_frame(m, h, w, []) for m in range(0, 60, 5)]
+        assert estimate_motion_multipair(frames, center_row=40, center_col=40) is None
+
+
     """Test semi-Lagrangian sampling along motion vector."""
 
     def test_sample_back_along_motion(self):

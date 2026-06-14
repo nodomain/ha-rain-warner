@@ -192,7 +192,26 @@ fi
 # treat as a fresh resource. Stale hashed copies and the legacy
 # unhashed file are removed on every deploy.
 CARD_SRC="$SCRIPT_DIR/dashboard/rain-warner-card.js"
+MAP_SRC="$SCRIPT_DIR/dashboard/rain-warner-map.html"
 CARD_DEST_DIR="$TARGET/www"
+
+# --- Sync radar map HTML to <config>/www/ ---
+if [[ -f "$MAP_SRC" ]]; then
+  mkdir -p "$CARD_DEST_DIR"
+  MAP_OUT=$(rsync -ci --inplace --no-perms --no-owner --no-group \
+    "$MAP_SRC" "$CARD_DEST_DIR/rain-warner-map.html" 2>&1) || {
+    echo "❌ Map HTML rsync failed:" >&2
+    echo "$MAP_OUT" >&2
+    exit 1
+  }
+  if [[ -n "$MAP_OUT" ]]; then
+    echo "✅ Radar map HTML synced"
+  else
+    echo "✅ Radar map HTML up-to-date"
+  fi
+else
+  echo "ℹ️  No radar map HTML found at $MAP_SRC — skipping."
+fi
 
 if [[ -f "$CARD_SRC" ]]; then
   CARD_HASH=$(shasum -a 256 "$CARD_SRC" | awk '{print $1}' | cut -c1-8)

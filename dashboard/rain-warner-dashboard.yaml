@@ -1,18 +1,12 @@
 views:
   - sections:
       - cards:
-          - type: custom:rain-warner-card
-            title: Rain Warner
-            precipitation_entity: sensor.rain_warner_current_precipitation
-            forecast_entity: binary_sensor.rain_warner_rain_expected
-            type_entity: sensor.rain_warner_precipitation_type
-            rain_end_entity: sensor.rain_warner_rain_ends_in
-            rain_start_entity: sensor.rain_warner_rain_starts_in
-            today_entity: sensor.rain_warner_precipitation_today
-            rain_starts_at_entity: sensor.rain_warner_rain_starts_at
-            rain_ends_at_entity: sensor.rain_warner_rain_ends_at
-        type: grid
-      - cards:
+          - type: iframe
+            url: /local/rain-warner-map.html?v=11
+            aspect_ratio: "4:3"
+            layout_options:
+              grid_columns: 4
+              grid_rows: 6
           - type: heading
             heading: Aktuell
           - color: blue
@@ -37,15 +31,6 @@ views:
               - condition: state
                 entity: binary_sensor.rain_warner_raining
                 state: "off"
-        type: grid
-      - cards:
-          - type: heading
-            heading: Vorhersage 2h
-          - color: cyan
-            entity: binary_sensor.rain_warner_rain_expected
-            icon: mdi:weather-partly-rainy
-            name: Regen erwartet?
-            type: tile
           - entity: sensor.rain_warner_rain_ends_at
             icon: mdi:clock-check-outline
             name: Regen endet
@@ -54,13 +39,17 @@ views:
               - condition: state
                 entity: binary_sensor.rain_warner_raining
                 state: "on"
+        type: grid
+      - cards:
+          - type: heading
+            heading: Vorhersage
           - entity: sensor.rain_warner_max_precipitation_1h
             icon: mdi:arrow-up-bold
-            name: Max nächste Stunde
+            name: Max 1h
             type: tile
           - entity: sensor.rain_warner_max_precipitation_2h
             icon: mdi:arrow-up-bold-box
-            name: Max nächste 2h
+            name: Max 2h
             type: tile
           - entity: sensor.rain_warner_total_precipitation_1h
             icon: mdi:cup-water
@@ -70,48 +59,16 @@ views:
             icon: mdi:bucket-outline
             name: Gesamt 2h
             type: tile
-        type: grid
-      - cards:
           - type: heading
             heading: Verlauf
           - entities:
               - entity: sensor.rain_warner_current_precipitation
-                name: Niederschlag mm/h
+                name: mm/h
               - entity: sensor.rain_warner_max_precipitation_1h
                 name: Max 1h
             hours_to_show: 24
             type: history-graph
-          - entities:
-              - entity: binary_sensor.rain_warner_raining
-                name: Regen
-              - entity: binary_sensor.rain_warner_rain_expected
-                name: Erwartet
-            hours_to_show: 24
-            type: history-graph
-        type: grid
-      - cards:
-          - type: heading
-            heading: Info
-          - content: "## 🌧️ Rain Warner
-
-
-              **Datenquelle:** DWD RADOLAN Radar
-
-
-              **Auflösung:** 1.1 km × 1.1 km
-
-
-              **Update:** alle 5 Minuten
-
-
-              **Nowcast:** 2h Vorhersage (RADVOR)
-
-
-              ---
-
-
-              *Daten: Deutscher Wetterdienst (DWD) Open Data*"
-            type: markdown
         type: grid
     title: Regenradar
+    max_columns: 2
     type: sections

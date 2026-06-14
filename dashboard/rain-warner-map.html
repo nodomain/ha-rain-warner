@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="de">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, user-scalable=yes"
+        />
+        <title>Rain Warner Radar</title>
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            html,
+            body,
+            #map {
+                width: 100%;
+                height: 100%;
+            }
+            .leaflet-container {
+                background: #1a1a2e;
+            }
+            .speed-label {
+                background: rgba(0, 0, 0, 0.7);
+                border: none;
+                border-radius: 3px;
+                padding: 2px 5px;
+                font-size: 11px;
+                font-weight: 500;
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+                color: #eee;
+                white-space: nowrap;
+            }
+            .speed-value {
+                background: rgba(0, 0, 0, 0.7);
+                border: none;
+                border-radius: 3px;
+                padding: 2px 6px;
+                font-size: 10px;
+                font-weight: 400;
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+                color: #aaa;
+                white-space: nowrap;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <script>
+            (function () {
+                const CONFIG = {
+                    lat: 49.461681183695944,
+                    lon: 11.153783798217775,
+                    cameraEntity: "camera.radarbild",
+                    refreshInterval: 5 * 60 * 1000,
+                    zoom: 9,
+                };
+
+                // --- HA connection ---
+                function getHass() {
+                    try {
+                        const ha =
+                            window.parent.document.querySelector(
+                                "home-assistant",
+                            );
+                        if (ha && ha.hass) return ha.hass;
+                    } catch (e) {}
+                    return null;
+                }
+
+                function getCameraAttrs() {
+                    const hass = getHass();
+                    if (
+                        hass &&
+                        hass.states &&
+                        hass.states[CONFIG.cameraEntity]
+                    ) {
+                        return hass.states[CONFIG.cameraEntity].attributes;
+                    }
+                    return null;
+                }
+
+                // --- Map setup ---
+                const map = L.map("map", {
+                    center: [CONFIG.lat, CONFIG.lon],
+                    zoom: 8,
+                    zoomControl: true,
+                });
+
+                // Base map (CartoDB Dark Matter — great for radar overlay)
+                L.tileLayer(
+                    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+                    {
+                        attribution: "&copy; OSM &copy; CARTO",
+                        subdomains: "abcd",
+                        maxZoom: 18,
+                    },
+                ).addTo(map);
+
+                // DWD Radar WMS via local proxy (avoids CORS)
+                // Needs auth — we'll add it via a custom fetch-based tile layer
+                let radarLayer = null;
+
+                function setupRadarLayer() {
+                    radarLayer = L.tileLayer
+                        .wms("/api/rain_warner/wms", {
+                            layers: "dwd:Radar_rv_product_1x1km_ger",
+                            format: "image/png",
+                            transparent: true,
+                            opacity: 0.7,
+                            attribution: "Radar: DWD",
+                        })
+                        .addTo(map);
+                }
+                setupRadarLayer();
+
+                // Location marker
+                L.circleMarker([CONFIG.lat, CONFIG.lon], {
+                    radius: 7,
+                    color: "#fff",
+                    fillColor: "#4285f4",
+                    fillOpacity: 1,
+                    weight: 2,
+                }).addTo(map);
+
+                // --- Motion arrow (geo-scaled, zoom-aware) ---
+                let arrowGroup = L.layerGroup().addTo(map);
+
+                function updateMotionArrow() {
+                    arrowGroup.clearLayers();
+
+                    const attrs = getCameraAttrs();
+                    if (!attrs) return;
+
+                    const speed = attrs.motion_speed_kmh || 0;
+                    const dr = attrs.motion_dr_per_min || 0;
+                    const dc = attrs.motion_dc_per_min || 0;
+
+                    if (speed < 2) return;
+
+                    // Direction: rain comes FROM this direction (reverse of motion vector)
+                    const dx = -dc;
+                    const dy = -dr;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    if (len < 1e-6) return;
+                    const dxN = dx / len;
+                    const dyN = dy / len;
+
+                    // Convert direction to bearing (degrees from north, clockwise)
+                    // dy = north component (positive = north), dx = east component
+                    const bearingRad = Math.atan2(dxN, dyN);
+
+                    // Compute geo-point at distance km from origin along bearing
+                    function destPoint(lat, lon, distKm, bearRad) {
+                        const R = 6371;
+                        const d = distKm / R;
+                        const lat1 = (lat * Math.PI) / 180;
+                        const lon1 = (lon * Math.PI) / 180;
+                        const lat2 = Math.asin(
+                            Math.sin(lat1) * Math.cos(d) +
+                                Math.cos(lat1) * Math.sin(d) * Math.cos(bearRad),
+                        );
+                        const lon2 =
+                            lon1 +
+                            Math.atan2(
+                                Math.sin(bearRad) * Math.sin(d) * Math.cos(lat1),
+                                Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
+                            );
+                        return [
+                            (lat2 * 180) / Math.PI,
+                            (lon2 * 180) / Math.PI,
+                        ];
+                    }
+
+                    // Build hour tick points (1h, 2h, 3h, 4h, 5h, 6h)
+                    const hourPoints = [1, 2, 3, 4, 5, 6].map((h) => ({
+                        h,
+                        dist: speed * h,
+                        latlng: destPoint(
+                            CONFIG.lat,
+                            CONFIG.lon,
+                            speed * h,
+                            bearingRad,
+                        ),
+                        time: new Date(Date.now() + h * 3600000),
+                    }));
+
+                    // Arrow shaft: polyline from origin to 6h point
+                    const endPoint = hourPoints[5].latlng;
+                    L.polyline(
+                        [[CONFIG.lat, CONFIG.lon], endPoint],
+                        {
+                            color: "#e0e0e0",
+                            weight: 2.5,
+                            opacity: 0.9,
+                            interactive: false,
+                        },
+                    ).addTo(arrowGroup);
+
+                    // Arrowhead at origin (tip of the arrow = where rain comes from)
+                    // Small triangle marker at origin pointing in bearing direction
+                    const headSize = speed * 0.08; // proportional to arrow length
+                    const headTip = destPoint(
+                        CONFIG.lat,
+                        CONFIG.lon,
+                        -headSize,
+                        bearingRad,
+                    );
+                    const headLeft = destPoint(
+                        CONFIG.lat,
+                        CONFIG.lon,
+                        headSize * 0.5,
+                        bearingRad + 2.6,
+                    );
+                    const headRight = destPoint(
+                        CONFIG.lat,
+                        CONFIG.lon,
+                        headSize * 0.5,
+                        bearingRad - 2.6,
+                    );
+                    L.polygon([headTip, headLeft, headRight], {
+                        color: "#e0e0e0",
+                        fillColor: "#e0e0e0",
+                        fillOpacity: 0.9,
+                        weight: 1,
+                        interactive: false,
+                    }).addTo(arrowGroup);
+
+                    // Hour tick marks + time labels (hide when overlapping at low zoom)
+                    const p1 = map.latLngToLayerPoint([CONFIG.lat, CONFIG.lon]);
+                    const p2 = map.latLngToLayerPoint([CONFIG.lat + 0.009, CONFIG.lon]);
+                    const pixelsPerKm = Math.abs(p2.y - p1.y) / 1.0; // 0.009° lat ≈ 1 km
+                    const minPixelsBetweenLabels = 50;
+
+                    hourPoints.forEach((pt, idx) => {
+                        // Skip intermediate ticks if they'd overlap
+                        const distBetween = idx === 0 ? pt.dist : pt.dist - hourPoints[idx - 1].dist;
+                        if (distBetween * pixelsPerKm < minPixelsBetweenLabels && idx < hourPoints.length - 1) {
+                            return;
+                        }
+
+                        // Tick: short perpendicular line
+                        const perpBear1 = bearingRad + Math.PI / 2;
+                        const perpBear2 = bearingRad - Math.PI / 2;
+                        const tickLen = speed * 0.04;
+                        const t1 = destPoint(
+                            pt.latlng[0],
+                            pt.latlng[1],
+                            tickLen,
+                            perpBear1,
+                        );
+                        const t2 = destPoint(
+                            pt.latlng[0],
+                            pt.latlng[1],
+                            tickLen,
+                            perpBear2,
+                        );
+                        L.polyline([t1, t2], {
+                            color: "#e0e0e0",
+                            weight: 2,
+                            opacity: 0.8,
+                            interactive: false,
+                        }).addTo(arrowGroup);
+
+                        // Time label
+                        const lbl = pt.time.toLocaleTimeString("de-DE", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                        });
+                        const labelOffset = destPoint(
+                            pt.latlng[0],
+                            pt.latlng[1],
+                            tickLen * 2,
+                            perpBear1,
+                        );
+                        L.marker(labelOffset, {
+                            icon: L.divIcon({
+                                className: "speed-label",
+                                html: lbl,
+                                iconSize: [42, 16],
+                                iconAnchor: [0, 8],
+                            }),
+                            interactive: false,
+                        }).addTo(arrowGroup);
+                    });
+
+                    // Speed label — offset perpendicular to the shaft midpoint
+                    const midPoint = hourPoints[2]
+                        ? hourPoints[2].latlng
+                        : hourPoints[0].latlng;
+                    const perpBearLabel = bearingRad - Math.PI / 2;
+                    const speedLabelPos = destPoint(
+                        midPoint[0],
+                        midPoint[1],
+                        speed * 0.35,
+                        perpBearLabel,
+                    );
+                    L.marker(speedLabelPos, {
+                        icon: L.divIcon({
+                            className: "speed-value",
+                            html: `${Math.round(speed)} km/h`,
+                            iconSize: [52, 16],
+                            iconAnchor: [26, 8],
+                        }),
+                        interactive: false,
+                    }).addTo(arrowGroup);
+                }
+
+                // --- Refresh cycle ---
+                function refresh() {
+                    if (radarLayer) {
+                        radarLayer.setParams({ _t: Date.now() }, false);
+                    }
+                    updateMotionArrow();
+                }
+
+                // Redraw arrow on zoom (label visibility depends on zoom level)
+                map.on("zoomend", updateMotionArrow);
+
+                // Initial load (delay for HA frontend to be ready)
+                setTimeout(() => {
+                    updateMotionArrow();
+                }, 2000);
+
+                // Auto-refresh every 5 min
+                setInterval(refresh, CONFIG.refreshInterval);
+                document.addEventListener("visibilitychange", () => {
+                    if (!document.hidden) refresh();
+                });
+            })();
+        </script>
+    </body>
+</html>

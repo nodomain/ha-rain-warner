@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-14 - Camera entity, interactive radar map, robust motion tracking
+
+### Added
+
+- **Radar camera entity** (`camera.radarbild`) rendering a local radar
+  crop around your location as a PNG, color-coded by intensity with a
+  motion-direction arrow overlay. Exposes motion vector attributes
+  (`motion_dr_per_min`, `motion_dc_per_min`, `motion_speed_kmh`) for the
+  interactive map.
+- **Interactive Leaflet radar map** (`dashboard/rain-warner-map.html`) —
+  dark basemap with the DWD WMS radar overlay served through a
+  same-origin proxy. Shows a geo-scaled motion arrow that projects the
+  rain field's trajectory up to 6 hours with hour-tick marks and arrival
+  timestamps. The arrow scales with map zoom and hides overlapping labels
+  when zoomed out.
+- **Fullscreen map subview** — a clickable "Radarkarte" heading on the
+  dashboard navigates to a full-screen panel view of the map for better
+  overview. Returns via HA's native subview back button.
+- **DWD WMS proxy** (`wms_proxy.py`) and **XYZ tile server**
+  (`tile_server.py`) — same-origin HTTP views that serve DWD radar
+  imagery without CORS issues or an API key.
+
+### Changed
+
+- **Robust motion estimation.** The simple nowcast engine's TREC
+  estimator now averages motion vectors across several ~30-min frame
+  pairs instead of a single pair, applies parabolic sub-pixel
+  refinement for continuous (non-quantized) direction, rejects vectors
+  that rail at the search boundary, and filters outlier pairs by median
+  magnitude. The coordinator additionally smooths the result across
+  updates with an exponential moving average (α=0.4). Together these
+  eliminate the arrow direction jitter that occurred between 5-min
+  updates.
+
+### Fixed
+
+- **Alarm fatigue from the `rain_imminent` sensor.** The alert fired on
+  trace radar echoes (0.01 mm/h) that are imperceptible outdoors. The
+  "raining" threshold is now 0.1 mm/h (WMO measurable-precipitation
+  definition), forecast scanning for rain start/end ignores
+  sub-threshold steps, and `rain_imminent` only triggers when the
+  forecasted peak within 30 minutes reaches at least 0.3 mm/h.
+- **WMS proxy 502 on charged content types.** aiohttp's `web.Response`
+  rejects a `content_type` that contains a charset parameter. The proxy
+  now strips the charset before constructing the response, so DWD
+  responses with `Content-Type: ...; charset=utf-8` no longer 502.
+
+### Documentation
+
+- README rewritten to cover the camera entity, interactive map, alert
+  sensors, the TREC motion-estimation pipeline, and modern automation
+  examples.
+
+
 ## [0.6.7] - 2026-06-04 - Path-based cache busting for the Lovelace card
 
 ### Changed
